@@ -1,0 +1,84 @@
+---
+title: "Reference genomes and orthologs"
+author: "Lindsay Clark"
+format: html
+editor: visual
+---
+
+## Import genome sequence and annotation
+
+Download most recent genome version.
+
+```{bash}
+cd resources
+
+wget https://plasmodb.org/common/downloads/Current_Release/PvivaxP01/fasta/data/PlasmoDB-68_PvivaxP01_Genome.fasta
+
+wget https://plasmodb.org/common/downloads/Current_Release/PvivaxP01/gff/data/PlasmoDB-68_PvivaxP01.gff
+
+wget https://plasmodb.org/common/downloads/Current_Release/Pyoeliiyoelii17X/fasta/data/PlasmoDB-68_Pyoeliiyoelii17X_Genome.fasta
+
+wget https://plasmodb.org/common/downloads/Current_Release/Pyoeliiyoelii17X/gff/data/PlasmoDB-68_Pyoeliiyoelii17X.gff
+```
+
+## Orthology between vivax and yoelii
+
+```{r}
+library(jsonlite)
+library(dplyr)
+```
+
+Download orthologs from PlasmoDB.
+
+```{bash}
+wget --debug --header 'content-type: application/json' \
+-O "json_veupathdb/Plasmo_Plasmodium vivax P01.json.gz" \
+-H {urlbase}/service/record-types/gene/searches/GenesByTaxonGene/reports/standard \
+--post-data '{
+    "searchConfig": {
+        "parameters": {
+            "organism": "[\\"Plasmodium vivax P01\\"]"
+        }
+    },
+    "reportConfig": {
+        "attributes": ["primary_key", "organism"],
+        "tables": ["Orthologs"],
+        "attributeFormat": "text"
+    }
+}}'
+```
+
+Read JSON
+
+```{r}
+mycon <- gzfile("../json_veupathdb/Plasmo_Plasmodium vivax P01.json.gz",
+                open = 'rb')
+
+orthojson <- fromJSON(mycon)
+
+close(mycon)
+```
+
+Make a table of orthologs between vivax and yoelii. There are 5749, which gets reduced to 4055 when we filter to just syntenic orthologs.
+
+```{r}
+theseortho <-
+    do.call(
+        rbind,
+        lapply(orthojson$records$tables$Orthologs,
+               \(x) x[x$organism == "Plasmodium yoelii yoelii 17X",])
+    )
+
+theseortho <- theseortho[theseortho$is_syntenic == "yes",]
+```
+
+```{r}
+out <- theseortho %>%
+    dplyr::rename(Yoelii_gene = ortho_gene_source_id,
+           Vivax_gene = source_id) %>%
+    dplyr::select(Vivax_gene, Yoelii_gene)
+
+write.csv(out,
+          file = "../resources/vivax_yoelii_orthologs_2026-02-11.csv",
+          row.names = FALSE)
+```
