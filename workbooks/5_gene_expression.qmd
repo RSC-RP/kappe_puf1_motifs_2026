@@ -1,0 +1,146 @@
+---
+title: "Gene Expression"
+author: "Lindsay Clark"
+format: html
+editor: visual
+---
+
+## Overview
+
+In this notebook we determine which genes were expressed in *P. vivax* and *P. yoelii* and test for differential gene expression in *P. vivax* between control and hypnozoite-enriched samples.
+
+```{r}
+library(edgeR)
+library(plotrix)
+library(showtext)
+
+font_add("Arial", regular = "arial.ttf", bold = "arialbd.ttf",
+         italic = "ariali.ttf", bolditalic = "arialbi.ttf")
+showtext_auto()
+```
+
+## Import counts
+
+Import counts from nf-core pipeline for *P. vivax*.
+
+```{r}
+counts_pv_df <- read.table("../results/counts_vivax.txt",
+                            sep = "\t", header = TRUE, check.names = FALSE)
+
+counts_pv <- as.matrix(counts_pv_df[,-1])
+rownames(counts_pv) <- counts_pv_df$Gene
+
+rm(counts_pv_df)
+```
+
+Import the count matrices as downloaded from GEO for *P. yoelii*.
+
+```{r}
+counts_py_df <- read.table("../geo/GSE337317_P_yoelii_gene_counts.txt.gz",
+                           sep = "\t", header = TRUE)
+
+counts_py <- as.matrix(counts_py_df[,-(1:2)])
+rownames(counts_py) <- counts_py_df$gene_id
+
+rm(counts_py_df)
+```
+
+## Identify expressed orthologs
+
+We are looking at expression in 36h schizont samples only.
+
+```{r}
+ortho_df <- read.csv("../resources/vivax_yoelii_orthologs_2026-02-11.csv")
+```
+
+```{r}
+cpm_pv <- cpm(counts_pv[,c("p_viv_Cont176", "p_viv_Cont177", "p_viv_Cont179")])
+cpm_py <- cpm(counts_py)
+```
+
+If we want one cpm in all three samples, we get 4568 genes in vivax and 4347 in yoelii.
+
+```{r}
+mincpm <- 1
+minsam <- 3L
+
+expr_pv <- rownames(cpm_pv)[rowSums(cpm_pv >= mincpm) >= minsam]
+expr_py <- rownames(cpm_py)[rowSums(cpm_py >= mincpm) >= minsam]
+```
+
+```{r}
+ortho_df$Expressed_vivax <- ortho_df$Vivax_gene %in% expr_pv   # 3741
+ortho_df$Expressed_yoelii <- ortho_df$Yoelii_gene %in% expr_py # 3652
+ortho_df$Expressed_both <- ortho_df$Expressed_vivax & ortho_df$Expressed_yoelii
+
+saveRDS(ortho_df, file = "../results/R_objects/expressed_orthologs.rds")
+```
+
+Draw Venn diagram for Supplementary Figure 5 showing overlap in expression between *P. vivax* and *P. yoelii*.
+
+```{r}
+#| fig.height: 7
+#| fig.width: 7
+scl <- 0.5
+r_vvx <- sqrt(length(expr_pv)) * scl
+r_yli <- sqrt(length(expr_py)) * scl
+
+#pdf("../results/figure_components/venn_expressed_2026-06-11.pdf",
+#    width = 7, height = 7)
+plot(0:101, 0:101, col = "white", col.axis = "white",
+     col.lab = "white", col.main = "white",
+     fg = "white")
+draw.circle(50, 44, radius = r_vvx, lwd = 3)
+draw.circle(50, 56, radius = r_yli, lwd = 3)
+text(50, c(13.5, 50, 86.5), c("1057", "3511", "843"), cex = 2, family = "Arial")
+text(50, c(3, 97), c(expression(paste(italic("P. vivax"), " P01")),
+                     expression(paste(italic("P. yoelii"), " 17X"))),
+     cex = 2, family = "Arial")
+#dev.off()
+```
+
+## Differential gene expression in *P. vivax*
+
+The smallest library size (vivax only) is 0.24 million. The biggest is 6.9 million and the second biggest is 1.4 million. Given the small and variable size, and simple experimental design, edgeR might be the best approach to DGE. Five reads out of 0.24 million reads is about 20 counts per million. We want to meet this threshold in three samples (i.e. one experimental group). This leaves 3326 genes.
+
+```{r}
+keep_gene_pv <- rownames(counts_pv)[which(rowSums(cpm(counts_pv) > 20) >= 3)]
+```
+
+Build DGEList and normalize. Normalization factors range from 1.24 to 0.80. The largest two libraries have the smallest normalization factors.
+
+```{r}
+d_pv <- DGEList(counts_pv[keep_gene_pv,],
+                group = ifelse(grepl("Cont", colnames(counts_pv)), "Cont", "PI4K"))
+d_pv <- normLibSizes(d_pv, method = "TMM")
+```
+
+Estimate dispersion
+
+```{r}
+d_pv <- estimateDisp(d_pv)
+```
+
+Since there is a single factor, do an exact test.
+
+```{r}
+et_pv <- exactTest(d_pv)
+
+res_pv <- as.data.frame(topTags(et_pv, n = Inf, sort.by = "none"))
+```
+
+There are 489 genes significant at FDR \< 0.05.
+
+```{r}
+sum(res_pv$FDR < 0.05)
+
+sig_pv <- rownames(res_pv)[which(res_pv$FDR < 0.05)]
+```
+
+Export
+
+```{r}
+res_pv$Gene <- rownames(res_pv)
+write.table(res_pv, file = "../results/vivax_dge_results.txt",
+            sep = "\t", row.names = FALSE, col.names = TRUE)
+```
