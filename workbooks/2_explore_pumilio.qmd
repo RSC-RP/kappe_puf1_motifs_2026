@@ -1,0 +1,228 @@
+---
+title: "Explore Pumilio domain"
+author: "Lindsay Clark"
+format: html
+editor: visual
+---
+
+## Overview
+
+I aligned PUF1 and model Pumilio proteins in the notebook `1_protein_alignment.md`. Now I am going to extract the Pumilio domain from the alignment and see about analyzing the sequence.
+
+```{r}
+library(Biostrings)
+library(msa)
+```
+
+## *Plasmodium vivax* Pumilio domain
+
+Read in the FASTA just for *P. vivax*. Domain boundaries are at <https://plasmodb.org/plasmo/app/record/gene/PVP01_1015200#InterPro>
+
+```{r}
+pvivax_puf1 <- readAAStringSet("../puf1_fasta/PVP01_1015200.1.fa")
+
+pvivax_domain <- subseq(pvivax_puf1[[1]], start = 655, end = 966)
+
+pvivax_domain
+```
+
+```{r}
+as.character(pvivax_domain)
+```
+
+## Multiple sequence alignment
+
+Read in alignment from Clustal Omega, including *Plasmodium*, *Toxoplasma*, *Drosophila*, *Saccharomyces*, and human proteins.
+
+```{r}
+puf1_align <- readAAMultipleAlignment("../results/clustalo/puf1_2026-01-30.aln",
+                                      format = "clustal")
+```
+
+```{r}
+cons <- consensusMatrix(puf1_align)
+```
+
+There is a region around 1700-2100 in the alignment where the greatest number of species line up (fewest gap characters).
+
+```{r}
+plot(cons["-",])
+```
+
+Took a look in JALView. Position 655 in Pvivax PUF1 (starting with `GNIFNIAK`) is at position 1745 in the alignment. There are a few gaps of three or four amino acids. Position 966 in Pvivax PUF1 (ending in `SGKRIAWKL`) is at 2071 in the alignment. This corresponds to a high quality region of the alignment.
+
+Here are the regions of the alignment corresponding to the *Plasmodium vivax* Pumilio region:
+
+```{r}
+myreg <- list(c(1745,1842),
+              c(1847,1960),
+              c(1965,2007),
+              c(2011,2039),
+              c(2043,2053),
+              c(2055,2071))
+
+966 - 655 + 1
+sum(sapply(myreg, \(x) x[2] - x[1] + 1))
+```
+
+## RNA-binding coils
+
+On our AlphaFold model of PvPUF1 we see nine inward-facing coils that could bind RNA. Some of these residues have total conservation.
+
+- 664-676: `QTGCRILQRILER` - aligned 1754-1766
+
+- 702-712: `GNYLCQKLMEV` - aligned 1792-1802
+
+- 738-748: `GTRTVQKLIEM` - aligned 1828-1838
+
+- 775-785: `GNHVVQKCLVS` - aligned 1869-1879
+
+- 811-821: `GCCVIQRCIDS` - aligned 1905-1915
+
+- 847-857: `GNYVVQYVLNL` - aligned 1941-1951
+
+- 883-893: `ASNVVEKCLTI` - aligned 1981-1991
+
+- 923-933: `GNYVIQRALSV` - aligned 2024-2034
+
+- 957-966: `SSGKRIAWKL` - aligned 2062-2071
+
+```{r}
+subseq(pvivax_puf1[[1]], start = 664, end = 676)
+subseq(pvivax_puf1[[1]], start = 702, end = 712)
+subseq(pvivax_puf1[[1]], start = 738, end = 748)
+subseq(pvivax_puf1[[1]], start = 775, end = 785)
+subseq(pvivax_puf1[[1]], start = 811, end = 821)
+subseq(pvivax_puf1[[1]], start = 847, end = 857)
+subseq(pvivax_puf1[[1]], start = 883, end = 893)
+subseq(pvivax_puf1[[1]], start = 923, end = 933)
+subseq(pvivax_puf1[[1]], start = 957, end = 966)
+```
+
+## Print alignment with msa package
+
+```{r}
+coils <- list(c(1754,1766), c(1792,1802), c(1828,1838),
+              c(1869,1879), c(1905,1915), c(1941,1951),
+              c(1981,1991), c(2024,2034), c(2062,2071))
+```
+
+```{r}
+for(i in seq_along(coils)){
+    msaPrettyPrint(puf1_align, y = coils[[i]], output = "pdf",
+               file = paste0("../results/clustalo/msa_pretty_coil",
+                             i, "_", Sys.Date(), ".pdf"),
+               askForOverwrite = FALSE,
+               showConsensus = "none", showLogo = "top",
+               showNames = "left", showNumbering = "right",
+               paperWidth = 8.5, paperHeight = 11)
+}
+```
+
+## Comparison to Pumilio code papers
+
+The human PUM1 binding motif is `5' UGUAUAUA 3'`, and we want to see if the *Plasmodium* PUF1 proteins are different in ways that might change the binding motif.
+
+### Cheong and Tanaka Hall 2006
+
+<https://doi.org/10.1073/pnas.0606294103>
+
+Comparing Fig. 1 to my alignments. The coordinates in the paper match human PUM1 Q14671.
+
+- Coil 1 (N-terminus of protein but 3' end of RNA):
+
+  - Positions Ser863, Arg864, and Gln867 in the paper
+
+  - The Ser863 in the human version, involved in a Van der Wals interaction with adenine (A8), is Cys667 in PvPUF1 and is Cys in all of the *Plasmodium* and *Toxoplasma* sequence, as well as the *Saccharomyces* PUF4. It is Ser in human and *Drosophila*.
+
+  - The Arg668 and Gln671 (PvPUF1) are completely conserved.
+
+- Coil 2:
+
+  - Positions Asn899, Tyr900, and Gln903 in the paper
+
+  - These are completely conserved and are Asn703, Tyr704, and Gln707 in PvPUF1.
+
+  - These interact with the UA (7-8) at the end of the sequence
+
+- Coil 3:
+
+  - Positions Cys935, Arg936, and Gln939 in the paper
+
+  - We have Arg740 and Gln743 in PvPUF1, completely conserved in our alignment
+
+  - Cys935 is involved in Van der Wals interaction with adenine (A6) in the paper but is replaced with Thr739 in PvPUF1.
+
+  - We find the Thr across all *Plasmodium*, *Toxoplasma*, and *Saccharomyces* PUF4, and Cys in human and *Drosophila*
+
+- Coil 4:
+
+  - Positions Asn971, His972, and Gln975 in the paper
+
+  - These are totally conserved in our alignment
+
+  - Asn776, His777, Gln780 in PvPUF1
+
+  - Interact with uracil (U5)
+
+- Coil 5:
+
+  - Positions Cys1007, Arg1008, and Gln1011 in the paper
+
+  - PvPUF1 has Cys823, which is conserved across *Plasmodium*, *Toxoplasma*, and *Saccaromyces*, in place of Arg1008. This is the stacking interaction residue for A4.
+
+  - PvPUF1 has Cys822 and Gln826, conserved across the entire alignment, matching Cys1007 and Gln1011.
+
+- Coil 6:
+
+  - Positions Asn1043, Tyr1044, Gln1047 in paper
+
+  - These are completely conserved in the alignment
+
+  - Interact with U3
+
+- Coil 7:
+
+  - Positions Ser1079, Asn1080, Glu1083 in paper
+
+  - These are completely conserved in the alignment
+
+  - Interact with G2
+
+- Coil 8:
+
+  - Positions Asn1122, Tyr1123, Gln1126 in paper
+
+  - These are completely conserved in the alignment
+
+  - Interact with U1
+
+So the overall changes with respect to human PUM1 are:
+
+- Module 1 (A8) Ser12 -\> Cys12
+
+  - In human PUM1, other modules have a Cys12 interacting with A
+
+- Module 3 (A6) Cys12 -\> Thr12
+
+- Module 5 (A4) Arg13 -\> Cys13
+
+Notably, *Toxoplasma* and *Plasmodium* are identical to *Saccaromyces* PUF4 at all key residues, so we can see if that protein has been studied for its RNA binding motif.
+
+### Zhou et al. 2021
+
+<https://pmc.ncbi.nlm.nih.gov/articles/PMC8384837/>
+
+Figures 3 and 4 have their key findings regarding novel combinations of the three key residues that have binding specificity to a particular RNA nucleotide.
+
+The module 3 change from CRQ to TRQ was tested and still has binding specificity to A.
+
+The module 1 change from SRQ to CRQ, and the module 5 change from CRQ to CCQ, are not listed.
+
+### Sadée et al 2022
+
+https://doi.org/10.1038/s41467-022-31968-z
+
+Yeast PUF4
+
+Reviews literature saying that RNA targets are very different from human PUM1/2 despite similar amino acids contacting the RNA. Fig. 1 shows it as a nine nucleotide motif, more or less UGUANNNUA. There is a section in the middle of the RNA motif that does not interact as tightly with the protein.
