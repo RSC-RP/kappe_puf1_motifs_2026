@@ -7,3 +7,4 @@
 *.gff
 *.RData
 *.rds
+*_GO_*.json
