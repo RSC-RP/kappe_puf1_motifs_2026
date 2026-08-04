@@ -2,3 +2,7 @@
 .Rhistory
 .RData
 .Ruserdata
+*.gz
+*_Genome.fasta
+*.gff
+*.RData

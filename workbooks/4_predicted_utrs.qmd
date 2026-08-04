@@ -1,0 +1,224 @@
+---
+title: "Predicted untranslated regions"
+author: "Lindsay Clark"
+format: html
+editor: visual
+---
+
+## Overview
+
+Since not all genes have UTRs defined in the genome annotation, I will define predicted UTRs in which to search.
+
+## Import
+
+```{r}
+library(GenomicRanges)
+library(dplyr)
+```
+
+```{r}
+ortho_df <- read.csv("../resources/vivax_yoelii_orthologs_2026-02-11.csv")
+
+gff_pv <- rtracklayer::import("../resources/PlasmoDB-68_PvivaxP01.gff.gz")
+gff_py <- rtracklayer::import("../resources/PlasmoDB-68_Pyoeliiyoelii17X.gff.gz")
+```
+
+## P. vivax
+
+New 5' UTR and 3' UTR definitions were reported by Siegel et al. 2020: [https://www.nature.com/articles/s41598-020-73562-7](#0). These seem to be on an earlier version of the genome. Version 1 was published in 2016, and version 2 in 2019.
+
+```{r}
+utr5_pv <- rtracklayer::import("../resources/siegel_2020_S4_5UTR.gff")
+utr3_pv <- read.table("../resources/siegel_2020_S5_3UTR.gff", sep = "\t")
+```
+
+Import UTRs and build a table
+
+```{r}
+utr_df <- data.frame(Transcript = gff_pv[gff_pv$type == "mRNA"]$ID)
+utr_df$Gene <- sub("\\..*", "", utr_df$Transcript)
+
+temp_siegel <- data.frame(Gene = unlist(utr5_pv$Parent),
+                          Width_5UTR_Siegel = width(utr5_pv))
+utr_df <- left_join(utr_df, temp_siegel, by = "Gene")
+utr_df$Width_5UTR_Siegel[is.na(utr_df$Width_5UTR_Siegel)] <- 0L
+
+utr3_pv$Width_3UTR_Siegel <- abs(utr3_pv$V5 - utr3_pv$V4) + 1L
+utr3_pv$Gene <- sub("^Parent=", "", sub(";.*", "", utr3_pv$V9))
+utr_df <- left_join(utr_df, select(utr3_pv, Gene, Width_3UTR_Siegel), by = "Gene")
+utr_df$Width_3UTR_Siegel[is.na(utr_df$Width_3UTR_Siegel)] <- 0L
+
+gff_pv_5utr <- gff_pv[gff_pv$type == "five_prime_UTR"]
+gff_pv_3utr <- gff_pv[gff_pv$type == "three_prime_UTR"]
+
+temp_plasmo <- data.frame(Transcript = unlist(gff_pv_5utr$Parent),
+                          Width_5UTR_PlasmoDB = width(gff_pv_5utr))
+utr_df <- left_join(utr_df, temp_plasmo, by = "Transcript")
+utr_df$Width_5UTR_PlasmoDB[is.na(utr_df$Width_5UTR_PlasmoDB)] <- 0L
+
+temp_plasmo <- data.frame(Transcript = unlist(gff_pv_3utr$Parent),
+                          Width_3UTR_PlasmoDB = width(gff_pv_3utr))
+utr_df <- left_join(utr_df, temp_plasmo, by = "Transcript")
+utr_df$Width_3UTR_PlasmoDB[is.na(utr_df$Width_3UTR_PlasmoDB)] <- 0L
+
+rm(temp_siegel, temp_plasmo)
+
+gff_pv_mrna <- gff_pv[gff_pv$type == "mRNA"]
+mtch <- match(utr_df$Transcript, gff_pv_mrna$ID)
+utr_df$seqnames <- as.character(seqnames(gff_pv_mrna)[mtch])
+utr_df$strand <- as.character(strand(gff_pv_mrna)[mtch])
+
+gff_pv_cds <- gff_pv[gff_pv$type == "CDS"]
+temp <- data.frame(Gene = unique(gff_pv_cds$gene_id))
+temp$cds_start <- sapply(temp$Gene,
+                         \(x){
+                             min(start(gff_pv_cds[gff_pv_cds$gene_id == x]))
+                         })
+temp$cds_end <- sapply(temp$Gene,
+                       \(x){
+                           max(end(gff_pv_cds[gff_pv_cds$gene_id == x]))
+                       })
+utr_df <- left_join(utr_df, temp, by = "Gene")
+
+utr_df$utr5_start <- NA_integer_
+utr_df$utr5_end <- NA_integer_
+utr_df$utr3_start <- NA_integer_
+utr_df$utr3_end <- NA_integer_
+
+temp <- utr_df$Width_5UTR_Siegel > 0 & utr_df$strand == "+"
+utr_df$utr5_end[temp] <- utr_df$cds_start[temp] - 1L
+utr_df$utr5_start[temp] <- utr_df$cds_start[temp] - utr_df$Width_5UTR_Siegel[temp]
+
+temp <- utr_df$Width_5UTR_Siegel > 0 & utr_df$strand == "-"
+utr_df$utr5_end[temp] <- utr_df$cds_end[temp] + utr_df$Width_5UTR_Siegel[temp]
+utr_df$utr5_start[temp] <- utr_df$cds_end[temp] + 1L
+
+temp <- utr_df$Width_3UTR_Siegel > 0 & utr_df$strand == "+"
+utr_df$utr3_end[temp] <- utr_df$cds_end[temp] + utr_df$Width_3UTR_Siegel[temp]
+utr_df$utr3_start[temp] <- utr_df$cds_end[temp] + 1L
+
+temp <- utr_df$Width_3UTR_Siegel > 0 & utr_df$strand == "-"
+utr_df$utr3_end[temp] <- utr_df$cds_start[temp] - 1L
+utr_df$utr3_start[temp] <- utr_df$cds_start[temp] - utr_df$Width_3UTR_Siegel[temp]
+```
+
+Get the median UTR widths for known UTRs. This is 808 nt for 5' UTRs and 688 for 3' UTRs.
+
+```{r}
+widths_5utr <- tapply(utr_df$Width_5UTR_PlasmoDB, utr_df$Transcript, sum)
+med5 <- median(widths_5utr[widths_5utr > 0])
+
+widths_3utr <- tapply(utr_df$Width_3UTR_PlasmoDB, utr_df$Transcript, sum)
+med3 <- median(widths_3utr[widths_3utr > 0])
+```
+
+Get predicted coordinates
+
+```{r}
+utr_df_sub5 <- utr_df[utr_df$Width_5UTR_PlasmoDB == 0,]
+utr_df_sub3 <- utr_df[utr_df$Width_3UTR_PlasmoDB == 0,]
+
+temp <- utr_df_sub5$strand == "+"
+utr_df_sub5$utr5_start[temp] <- utr_df_sub5$cds_start[temp] - med5
+utr_df_sub5$utr5_end[temp] <- utr_df_sub5$cds_start[temp] - 1L
+
+temp <- utr_df_sub5$strand == "-"
+utr_df_sub5$utr5_end[temp] <- utr_df_sub5$cds_end[temp] + med5
+utr_df_sub5$utr5_start[temp] <- utr_df_sub5$cds_end[temp] + 1L
+
+temp <- utr_df_sub3$strand == "+"
+utr_df_sub3$utr3_end[temp] <- utr_df_sub3$cds_end[temp] + med3
+utr_df_sub3$utr3_start[temp] <- utr_df_sub3$cds_end[temp] + 1L
+
+temp <- utr_df_sub3$strand == "-"
+utr_df_sub3$utr3_start[temp] <- utr_df_sub3$cds_start[temp] - med3
+utr_df_sub3$utr3_end[temp] <- utr_df_sub3$cds_start[temp] - 1L
+
+utr_df_sub5$utr5_start[utr_df_sub5$utr5_start < 0] <- 0L
+utr_df_sub3$utr3_start[utr_df_sub3$utr3_start < 0] <- 0L
+```
+
+Build GRanges objects for these
+
+```{r}
+pred_pv_5utr <- GRanges(seqnames = utr_df_sub5$seqnames,
+                        ranges = IRanges(utr_df_sub5$utr5_start,
+                                         utr_df_sub5$utr5_end),
+                        strand = utr_df_sub5$strand)
+pred_pv_5utr$gene_id <- utr_df_sub5$Gene
+pred_pv_5utr$type <- "five_prime_UTR"
+
+pred_pv_3utr <- GRanges(seqnames = utr_df_sub3$seqnames,
+                        ranges = IRanges(utr_df_sub3$utr3_start,
+                                         utr_df_sub3$utr3_end),
+                        strand = utr_df_sub3$strand)
+pred_pv_3utr$gene_id <- utr_df_sub3$Gene
+pred_pv_3utr$type <- "three_prime_UTR"
+```
+
+## P. yoelii
+
+In the P. yoelii GFF we have exons and CDS listed, but not UTRs. I tried to define them by subtraction but there's really not much there. Just predict UTRs based on the median sized from P. vivax.
+
+```{r}
+gff_py_cds <- gff_py[gff_py$type == "CDS"]
+gff_py_mrna <- gff_py[gff_py$type == "mRNA"]
+utr_df_py <- data.frame(Transcript = gff_py_mrna$ID)
+utr_df_py$Gene <- sub("\\.[[:digit:]]+$", "", utr_df_py$Transcript)
+utr_df_py$seqnames <- as.character(seqnames(gff_py_mrna))
+utr_df_py$strand <- as.character(strand(gff_py_mrna))
+utr_df_py$cds_start <- NA_integer_
+utr_df_py$cds_end <- NA_integer_
+utr_df_py$utr5_start <- NA_integer_
+utr_df_py$utr5_end <- NA_integer_
+utr_df_py$utr3_start <- NA_integer_
+utr_df_py$utr3_end <- NA_integer_
+
+temp_parent <- as.character(unlist(gff_py_cds$Parent))
+
+for(i in seq_len(nrow(utr_df_py))){
+    theserow <- which(temp_parent == utr_df_py$Transcript[i])
+    utr_df_py$cds_start[i] <- min(start(gff_py_cds[theserow]))
+    utr_df_py$cds_end[i] <- max(end(gff_py_cds[theserow]))
+}
+
+topstrd <- utr_df_py$strand == "+"
+utr_df_py$utr5_start[topstrd] <- utr_df_py$cds_start[topstrd] - med5
+utr_df_py$utr5_end[topstrd] <- utr_df_py$cds_start[topstrd] - 1L
+
+utr_df_py$utr5_end[!topstrd] <- utr_df_py$cds_end[!topstrd] + med5
+utr_df_py$utr5_start[!topstrd] <- utr_df_py$cds_end[!topstrd] + 1L
+
+utr_df_py$utr3_end[topstrd] <- utr_df_py$cds_end[topstrd] + med3
+utr_df_py$utr3_start[topstrd] <- utr_df_py$cds_end[topstrd] + 1L
+
+utr_df_py$utr3_start[!topstrd] <- utr_df_py$cds_start[!topstrd] - med3
+utr_df_py$utr3_end[!topstrd] <- utr_df_py$cds_start[!topstrd] - 1L
+```
+
+Generate GRanges objects of predicted UTRs
+
+```{r}
+pred_py_5utr <- GRanges(seqnames = utr_df_py$seqnames,
+                        ranges = IRanges(utr_df_py$utr5_start,
+                                         utr_df_py$utr5_end),
+                        strand = utr_df_py$strand)
+pred_py_5utr$gene_id <- utr_df_py$Gene
+pred_py_5utr$Parent <- utr_df_py$Transcript
+pred_py_5utr$type <- "five_prime_UTR"
+
+pred_py_3utr <- GRanges(seqnames = utr_df_py$seqnames,
+                        ranges = IRanges(utr_df_py$utr3_start,
+                                         utr_df_py$utr3_end),
+                        strand = utr_df_py$strand)
+pred_py_3utr$gene_id <- utr_df_py$Gene
+pred_py_3utr$Parent <- utr_df_py$Transcript
+pred_py_3utr$type <- "three_prime_UTR"
+```
+
+Save predicted UTRs (not including anything that is annotated)
+
+```{r}
+save(pred_pv_5utr, pred_pv_3utr, pred_py_5utr, pred_py_3utr,
+     file = "../results/R_objects/pred_UTR_GRanges_2026-03-25.RData")
+```
