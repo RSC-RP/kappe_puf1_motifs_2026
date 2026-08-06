@@ -14,3 +14,5 @@ Seattle Children's Research Institute.
 
 See the `workbooks` folder for notebooks describing the analysis. Files are
 numbered to indicate their order for the analysis.
+
+This code is archived on Zenodo: [![DOI](https://zenodo.org/badge/1323124748.svg)](https://doi.org/10.5281/zenodo.21825603)
