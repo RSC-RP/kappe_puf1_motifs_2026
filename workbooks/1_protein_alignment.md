@@ -33,8 +33,6 @@ wget --debug --header 'content-type: application/json' \
 Then downloaded FASTA of orthologs:
 
 ``` bash
-mamba activate rcsbpdb_webquery # has "requests" module
-
 python scripts/download_from_ortho_table.py json_veupathdb/PVP01_1015200_orthologs.json \
 puf1_fasta/PVP01_1015200_orthologs.fasta \
 https://plasmodb.org/plasmo PlasmoDB Plasmodium
