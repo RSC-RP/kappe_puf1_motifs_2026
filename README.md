@@ -27,52 +27,53 @@ This code is archived on Zenodo: [![DOI](https://zenodo.org/badge/1323124748.svg
   - R 4.4 on Windows 11 (necessary for generation of figures using Arial font)
   - R 4.5 on Rocky Linux 9.8 (all `wget` commands were run on Linux)
  
- No non-standard hardware is required.
+No non-standard hardware is required.
  
- ## Installation guide
+## Installation guide
  
- Python and R can be installed using standard approaches.  The python `requests`
- module is required for the script `download_from_ortho_table.py`. For R,
- required Bioconductor packages include:
+Python and R can be installed using standard approaches.  The python `requests`
+module is required for the script `download_from_ortho_table.py`. For R,
+required Bioconductor packages include:
  
- * Biostrings
- * msa
- * GenomicRanges
- * edgeR
- * fgsea
+* Biostrings
+* msa
+* GenomicRanges
+* edgeR
+* fgsea
  
- And required CRAN packages include:
+And required CRAN packages include:
  
- * jsonlite
- * dplyr
- * plotrix
- * showtext
- * ggplot2
- * ggrepel
- * ggtext
+* jsonlite
+* dplyr
+* plotrix
+* showtext
+* ggplot2
+* ggrepel
+* ggtext
  
- Clustal Omega can be obtained as the `clustalo` package from bioconda.
+Clustal Omega can be obtained as the `clustalo` package from bioconda.
  
- All software can be installed in one hour or less on a standard system.
+All software can be installed in one hour or less on a standard system.
  
- ## Instructions
+## Instructions
  
- To reproduce the analysis, work through the following sets of notebooks.
+To reproduce the analysis, work through the following sets of notebooks. The
+entire analysis can be run within a few hours.
  
- * `1_protein_alignment.md`
+* `1_protein_alignment.md`
    - For identifying and aligning orthologous proteins to PvPUF01.
    - This notebook contains a series of commands to be run from a bash terminal.
    - For Python steps, the `requests` module must be installed.
    - This notebook may be skipped when reproducing the analysis; the outputs
    `puf1_fasta/closest_puf1.fa` and `results/clustalo/puf1_2026-01-30.aln` are
    included in the repository.
- * `2_explore_pumilio.qmd`
+* `2_explore_pumilio.qmd`
    - Contains notes on how the predicted binding motif UGUANNNUA was determined.
    - A standard Quarto notebook with R code that can be executed in RStudio.
    - The only output is a set of PDFs, saved to `results/clustalo`, displaying
    the protein sequence alignment at Pumilio domains. These are not necessary
    for running the downstream notebooks.
- * `3_genomes_orthologs.qmd`
+* `3_genomes_orthologs.qmd`
    - Downloads public data for _Plasmodium vivax_ and _P. yoelii_.
    - The `wget` commands to download the reference genomes and annotations are
    necessary for downstream notebooks. These FASTA and GFF files are saved in
