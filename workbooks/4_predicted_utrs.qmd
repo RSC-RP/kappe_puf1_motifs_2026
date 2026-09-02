@@ -25,28 +25,13 @@ gff_py <- rtracklayer::import("../resources/PlasmoDB-68_Pyoeliiyoelii17X.gff.gz"
 
 ## P. vivax
 
-New 5' UTR and 3' UTR definitions were reported by Siegel et al. 2020: [https://www.nature.com/articles/s41598-020-73562-7](#0). These seem to be on an earlier version of the genome. Version 1 was published in 2016, and version 2 in 2019.
+Import UTRs, document their width
 
 ```{r}
-utr5_pv <- rtracklayer::import("../resources/siegel_2020_S4_5UTR.gff")
-utr3_pv <- read.table("../resources/siegel_2020_S5_3UTR.gff", sep = "\t")
-```
-
-Import UTRs and build a table
-
-```{r}
-utr_df <- data.frame(Transcript = gff_pv[gff_pv$type == "mRNA"]$ID)
-utr_df$Gene <- sub("\\..*", "", utr_df$Transcript)
-
-temp_siegel <- data.frame(Gene = unlist(utr5_pv$Parent),
-                          Width_5UTR_Siegel = width(utr5_pv))
-utr_df <- left_join(utr_df, temp_siegel, by = "Gene")
-utr_df$Width_5UTR_Siegel[is.na(utr_df$Width_5UTR_Siegel)] <- 0L
-
-utr3_pv$Width_3UTR_Siegel <- abs(utr3_pv$V5 - utr3_pv$V4) + 1L
-utr3_pv$Gene <- sub("^Parent=", "", sub(";.*", "", utr3_pv$V9))
-utr_df <- left_join(utr_df, select(utr3_pv, Gene, Width_3UTR_Siegel), by = "Gene")
-utr_df$Width_3UTR_Siegel[is.na(utr_df$Width_3UTR_Siegel)] <- 0L
+gff_pv_cds <- gff_pv[gff_pv$type == "CDS"]
+gff_pv_mrna <- gff_pv[gff_pv$type == "mRNA"]
+utr_df <- data.frame(Transcript = gff_pv_mrna$ID)
+utr_df$Gene <- sub("\\.[[:digit:]]+$", "", utr_df$Transcript)
 
 gff_pv_5utr <- gff_pv[gff_pv$type == "five_prime_UTR"]
 gff_pv_3utr <- gff_pv[gff_pv$type == "three_prime_UTR"]
@@ -79,27 +64,6 @@ temp$cds_end <- sapply(temp$Gene,
                            max(end(gff_pv_cds[gff_pv_cds$gene_id == x]))
                        })
 utr_df <- left_join(utr_df, temp, by = "Gene")
-
-utr_df$utr5_start <- NA_integer_
-utr_df$utr5_end <- NA_integer_
-utr_df$utr3_start <- NA_integer_
-utr_df$utr3_end <- NA_integer_
-
-temp <- utr_df$Width_5UTR_Siegel > 0 & utr_df$strand == "+"
-utr_df$utr5_end[temp] <- utr_df$cds_start[temp] - 1L
-utr_df$utr5_start[temp] <- utr_df$cds_start[temp] - utr_df$Width_5UTR_Siegel[temp]
-
-temp <- utr_df$Width_5UTR_Siegel > 0 & utr_df$strand == "-"
-utr_df$utr5_end[temp] <- utr_df$cds_end[temp] + utr_df$Width_5UTR_Siegel[temp]
-utr_df$utr5_start[temp] <- utr_df$cds_end[temp] + 1L
-
-temp <- utr_df$Width_3UTR_Siegel > 0 & utr_df$strand == "+"
-utr_df$utr3_end[temp] <- utr_df$cds_end[temp] + utr_df$Width_3UTR_Siegel[temp]
-utr_df$utr3_start[temp] <- utr_df$cds_end[temp] + 1L
-
-temp <- utr_df$Width_3UTR_Siegel > 0 & utr_df$strand == "-"
-utr_df$utr3_end[temp] <- utr_df$cds_start[temp] - 1L
-utr_df$utr3_start[temp] <- utr_df$cds_start[temp] - utr_df$Width_3UTR_Siegel[temp]
 ```
 
 Get the median UTR widths for known UTRs. This is 808 nt for 5' UTRs and 688 for 3' UTRs.
