@@ -90,13 +90,27 @@ test_motif_enrichment <- function(motif, seqs){
     nuc_counts <- letterFrequency(seqs, c("A", "C", "G", "T")) |>
         colSums()
     nuc_freq <- nuc_counts / sum(nuc_counts)
+    # Dinucleotide frequencies
+    dinuc_counts <- dinucleotideFrequency(seqs) |> colSums()
+    dinuc_freq <- list()
+    for(n1 in c("A", "C", "G", "T")){
+        temp <- dinuc_counts[paste0(n1, c("A", "C", "G", "T"))]
+        temp <- temp / sum(temp)
+        names(temp) <- c("A", "C", "G", "T")
+        dinuc_freq[[n1]] <- temp
+    }
     # Probability of finding motif randomly
     letters <- strsplit(motif, split = "")[[1]]
     prob_motif <- 1
-    for(l in letters){
-        if(l == "N") next
-        stopifnot(l %in% names(nuc_freq))
-        prob_motif <- prob_motif * nuc_freq[l]
+    for(i in seq_along(letters)){
+        if(letters[i] == "N") next
+        stopifnot(letters[i] %in% names(nuc_freq))
+        if(i == 1 || letters[i-1] == "N"){
+            prob_motif <- prob_motif * nuc_freq[letters[i]]
+        } else {
+            prob_motif <- prob_motif *
+                dinuc_freq[[letters[i-1]]][letters[i]]
+        }
     }
     # Get the number of sites big enough to have the motif
     temp <- width(seqs) - length(letters) + 1L
