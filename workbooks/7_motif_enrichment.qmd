@@ -410,6 +410,34 @@ table(enrich_df_sig$Region, enrich_df_sig$Species)
 table(enrich_df_sig$Short, enrich_df_sig$Species)
 ```
 
+Overall enrichment of UGUANNNUA
+
+```{r}
+temp <- test_motif_enrichment("UGUANNNUA", seq_pv_3utr_split)
+temp["obs_rate"]/temp["exp_rate"]
+temp
+
+temp <- test_motif_enrichment("UGUANNNUA", seq_pv_5utr_split)
+temp["obs_rate"]/temp["exp_rate"]
+temp
+
+temp <- test_motif_enrichment("UGUANNNUA", seq_pv_cds_split)
+temp["obs_rate"]/temp["exp_rate"]
+temp
+
+temp <- test_motif_enrichment("UGUANNNUA", seq_py_3utr)
+temp["obs_rate"]/temp["exp_rate"]
+temp
+
+temp <- test_motif_enrichment("UGUANNNUA", seq_py_5utr)
+temp["obs_rate"]/temp["exp_rate"]
+temp
+
+temp <- test_motif_enrichment("UGUANNNUA", seq_py_cds_splice)
+temp["obs_rate"]/temp["exp_rate"]
+temp
+```
+
 ## Visualize enrichment test
 
 This is a component of Supplementary Figure 5.
