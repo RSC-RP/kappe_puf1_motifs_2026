@@ -699,6 +699,36 @@ ggplot(aes(x = Rate_ratio, y = Mean_logFC_with)) +
     scale_fill_manual(values = c("white", "lightgreen"))
 ```
 
+Build a grid to show concordance across motifs
+
+```{r}
+grid_prep <- combined_df %>%
+    mutate(Sig_enriched = Global_FDR.x < 0.05,
+           Sig_DGE = Global_FDR.y < 0.05) %>%
+    select(Motif, Region, Sig_enriched, Sig_DGE) %>%
+    tidyr::pivot_longer(cols = starts_with("Sig_"), names_prefix = "Sig_",
+                        names_to = "Test", values_to = "Significant") %>%
+    mutate(Test1 = paste(Region, Test),
+           Short = substring(Motif, 5, nchar(Motif) - 2))
+
+grid_prep$Motif_category <- "9nuc with G"
+grid_prep$Motif_category[nchar(grid_prep$Motif) == 8] <- "8nuc"
+grid_prep$Motif_category[grep("^UGUA[UCA]{3}UA$", grid_prep$Motif)] <- "9nuc HHH"
+```
+
+```{r}
+#| fig.width: 5
+#| fig.height: 12
+grid_prep %>%
+    filter(!is.na(Significant)) %>%
+ggplot(aes(x = Test, y = Motif)) +
+    geom_tile(aes(fill = Significant), width = 1, height = 1, color = "black") +
+    geom_text(aes(label = Short), data = filter(grid_prep, Significant)) +
+    facet_grid(rows = vars(Motif_category), cols = vars(Region),
+               scales = "free_y", space = "free_y") +
+    scale_fill_manual(values = c("white", "lightgreen"))
+```
+
 ### Probably delete below here
 
 Run FGSEA with the P. vivax DGE to see if any motifs from the 3' UTR are differentially expressed.
