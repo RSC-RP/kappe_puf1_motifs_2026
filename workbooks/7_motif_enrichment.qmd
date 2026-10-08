@@ -619,6 +619,86 @@ res_pv <- read.table("../results/vivax_dge_results.txt",
                      sep = "\t", header = TRUE)
 ```
 
+Set up data frame to contain output for all motifs, in the two UTR regions.
+
+```{r}
+dge_enrich_df <- data.frame(
+    Motif = rep(all_motifs, times = 2),
+    Region = rep(c("3' UTR", "5' UTR"), each = length(all_motifs))
+)
+
+dge_enrich_df$Mean_logFC_with <- NA_real_
+dge_enrich_df$Mean_logFC_without <- NA_real_
+dge_enrich_df$Pval_Ttest_twosided <- NA_real_
+dge_enrich_df$N_genes <- NA_integer_
+```
+
+Loop through motifs and fill in results
+
+```{r}
+for(motif in all_motifs){
+    for(reg in c("3' UTR", "5' UTR")){
+        if(reg == "3' UTR"){
+            gbm <- genes_by_motif_pv_3utr
+        } else {
+            gbm <- genes_by_motif_pv_5utr
+        }
+        temprows <- which(res_pv$Gene %in% gbm[[motif]])
+        logFC_a <- res_pv$logFC[temprows]
+        logFC_b <- res_pv$logFC[-temprows]
+        i <- which(dge_enrich_df$Motif == motif & dge_enrich_df$Region == reg)
+        dge_enrich_df$Mean_logFC_with[i] <- mean(logFC_a)
+        dge_enrich_df$Mean_logFC_without[i] <- mean(logFC_b)
+        dge_enrich_df$N_genes[i] <- length(temprows)
+        
+        if(length(temprows) > 2){
+            myT <- t.test(logFC_a, logFC_b, alternative = "two.sided")
+            dge_enrich_df$Pval_Ttest_twosided[i] <- myT$p.value
+        }
+    }
+}
+
+dge_enrich_df$Global_FDR <- p.adjust(dge_enrich_df$Pval_Ttest_twosided,
+                                     method = "fdr")
+```
+
+All that are significant show positive enrichment with hypnozoites. UGUA**CAU**UA in the 3' UTR is the most significant, but not the only. There is also UGUA**AAU**UA, UGUA**ACU**UA, UGUA**CUU**UA (3' UTR), UGUA**AAC**UA, UGUA**ACC**UA, and UGUA**CUA**UA (5' UTR) for the nine-nucleotide motifs, and UGUA**AG**UA in 5' UTR. This set of nine-nucleotide motifs is not exactly the same set that we saw enriched in Pv and Py 3' UTRs but what is similar is that they all lack G's in the variable region.
+
+```{r}
+dge_enrich_df %>%
+    filter(Global_FDR < 0.05)
+```
+
+Compare sequence enrichment with differential gene expression
+
+```{r}
+combined_df <- enrich_df %>%
+    filter(Species == "*P. vivax* P01" & Region != "CDS") %>%
+    left_join(dge_enrich_df, by = c("Motif", "Region")) %>%
+    mutate(Short = substring(Motif, 5, nchar(Motif) - 2))
+```
+
+```{r}
+ggplot(combined_df, aes(x = Rate_ratio, y = Mean_logFC_with)) +
+    geom_label(aes(label = Short)) +
+    facet_wrap(vars(Region))
+```
+
+```{r}
+#| fig.width: 7
+#| fig.height: 10
+combined_df %>%
+    filter(grepl("^[UAC]{3}$", Short)) %>%
+ggplot(aes(x = Rate_ratio, y = Mean_logFC_with)) +
+    geom_hline(yintercept = mean(res_pv$logFC), color = "blue") +
+    geom_vline(xintercept = 1, color = "blue") +
+    geom_label(aes(label = Short,
+                   fill = Global_FDR.x < 0.05 & Global_FDR.y < 0.05)) +
+    facet_wrap(vars(Region), ncol = 1) +
+    labs(fill = "Sig. both tests") +
+    scale_fill_manual(values = c("white", "lightgreen"))
+```
+
 ### Probably delete below here
 
 Run FGSEA with the P. vivax DGE to see if any motifs from the 3' UTR are differentially expressed.
