@@ -153,16 +153,23 @@ test_motif_enrichment("UGUAUAAUA", seq_pv_3utr_split)
 test_motif_enrichment("UGUAUAAUA", seq_py_3utr)
 ```
 
-Test all UGUANNNUA motifs.
+Test all UGUANNNUA and UGUANNUA motifs.
 
 ```{r}
 letters <- c("A", "C", "G", "U")
-all_motifs <- paste0(
+all_motifs <- c(paste0(
     "UGUA",
     rep(letters, each = 16),
     rep(rep(letters, each = 4), times = 4),
     rep(letters, times = 16),
     "UA"
+),
+paste0(
+    "UGUA",
+    rep(letters, each = 4),
+    rep(letters, times = 4),
+    "UA"
+)
 )
 
 all_tests_pv <- sapply(
@@ -198,8 +205,8 @@ See what Benjamini and Hochberg have to say about it
 padj <- p.adjust(c(enrich_df$Poisson_P_pv, enrich_df$Poisson_P_py),
                  method = "fdr")
 
-enrich_df$FDR_global_pv <- padj[1:64]
-enrich_df$FDR_global_py <- padj[65:128]
+enrich_df$FDR_global_pv <- padj[1:80]
+enrich_df$FDR_global_py <- padj[81:160]
 ```
 
 ```{r}
@@ -207,7 +214,7 @@ View(enrich_df[enrich_df$FDR_global_pv < 0.05 |
                    enrich_df$FDR_global_py < 0.05,])
 ```
 
-There are 25 significantly enriched in P. vivax and eight significantly enriched in P. yoelii. The seven motifs CCA, CAU, UAA, UAC, UAG, UCA, and UUU are enriched in both.
+There are 38 significantly enriched in P. vivax and 14 significantly enriched in P. yoelii. The seven motifs CCA, CAU, UAA, UAC, UAG, UCA, UUU, CA, GA, GC, UA, UC, and UG are enriched in both.
 
 ```{r}
 enriched_motifs_pv <- enrich_df$Motif[enrich_df$FDR_global_pv < 0.05]
@@ -273,11 +280,11 @@ enrich_df_5utr <- data.frame(Motif = all_motifs,
 padj <- p.adjust(c(enrich_df_5utr$Poisson_P_pv, enrich_df_5utr$Poisson_P_py),
                  method = "fdr")
 
-enrich_df_5utr$FDR_global_pv <- padj[1:64]
-enrich_df_5utr$FDR_global_py <- padj[65:128]
+enrich_df_5utr$FDR_global_pv <- padj[1:80]
+enrich_df_5utr$FDR_global_py <- padj[81:160]
 ```
 
-P. vivax still has a lot of UGUANNNUA motifs in the 5' UTR.
+P. vivax still has a lot of UGUANNNUA and UGUANNUA motifs in the 5' UTR.
 
 ```{r}
 enriched_motifs_pv <- enrich_df_5utr$Motif[enrich_df_5utr$FDR_global_pv < 0.05]
@@ -364,8 +371,8 @@ enrich_df_3utr <- enrich_df
 ```{r}
 enrich_df <- data.frame(
     Motif = rep(all_motifs, times = 6),
-    Species = rep(rep(c("*P. vivax* P01", "*P. yoelii* 17X"), each = 64), times = 3),
-    Region = rep(c("3' UTR", "5' UTR", "CDS"), each = 128),
+    Species = rep(rep(c("*P. vivax* P01", "*P. yoelii* 17X"), each = 80), times = 3),
+    Region = rep(c("3' UTR", "5' UTR", "CDS"), each = 160),
     Matches = c(
         enrich_df_3utr$Matches_pv, enrich_df_3utr$Matches_py,
         enrich_df_5utr$Matches_pv, enrich_df_5utr$Matches_py,
@@ -401,7 +408,8 @@ Look at significant hits
 
 ```{r}
 enrich_df_sig <- enrich_df[enrich_df$Global_FDR < 0.05,]
-enrich_df_sig$Short <- substring(enrich_df_sig$Motif, 5, 7)
+enrich_df_sig$Short <- substring(enrich_df_sig$Motif, 5,
+                                 nchar(enrich_df_sig$Motif) - 2)
 enrich_df_sig$Region <- factor(enrich_df_sig$Region,
                                levels = c("5' UTR", "CDS", "3' UTR"))
 
