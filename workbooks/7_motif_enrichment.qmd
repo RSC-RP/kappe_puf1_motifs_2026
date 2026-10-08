@@ -21,6 +21,7 @@ library(ggtext)
 library(jsonlite)
 library(plotrix)
 library(showtext)
+library(universalmotif)
 
 font_add("Arial", regular = "arial.ttf", bold = "arialbd.ttf",
          italic = "ariali.ttf", bolditalic = "arialbi.ttf")
@@ -81,67 +82,59 @@ Eliminate stretches of N's in the vivax 3' UTRs
 seq_pv_3utr_split <- unlist(strsplit(seq_pv_3utr, "N"))
 ```
 
-Function to run test for enrichment
+Function to run test for enrichment. I had previously used mononucleotide, then dinucleotide frequencies, across all provided sequences to predict the null rate for the motif. At a reviewer's recommendation I tried shuffling the sequences and then running the test, which I still found to be significant although not as much. This is probably because mononucleotide and dinucleotide frequencies are not uniform across the sequences. So, instead I am now using shuffled sequences to create my null expectation for the motif rate.
 
 ```{r}
-test_motif_enrichment <- function(motif, seqs){
+test_motif_enrichment <- function(motif, seqs, shuffle_seeds = 1:10){
     motif <- gsub("U", "T", motif)
-    # Nucleotide frequencies
-    nuc_counts <- letterFrequency(seqs, c("A", "C", "G", "T")) |>
-        colSums()
-    nuc_freq <- nuc_counts / sum(nuc_counts)
-    # Dinucleotide frequencies
-    dinuc_counts <- dinucleotideFrequency(seqs) |> colSums()
-    dinuc_freq <- list()
-    for(n1 in c("A", "C", "G", "T")){
-        temp <- dinuc_counts[paste0(n1, c("A", "C", "G", "T"))]
-        temp <- temp / sum(temp)
-        names(temp) <- c("A", "C", "G", "T")
-        dinuc_freq[[n1]] <- temp
-    }
-    # Probability of finding motif randomly
-    letters <- strsplit(motif, split = "")[[1]]
-    prob_motif <- 1
-    for(i in seq_along(letters)){
-        if(letters[i] == "N") next
-        stopifnot(letters[i] %in% names(nuc_freq))
-        if(i == 1 || letters[i-1] == "N"){
-            prob_motif <- prob_motif * nuc_freq[letters[i]]
-        } else {
-            prob_motif <- prob_motif *
-                dinuc_freq[[letters[i-1]]][letters[i]]
-        }
-    }
+    
     # Get the number of sites big enough to have the motif
-    temp <- width(seqs) - length(letters) + 1L
+    temp <- width(seqs) - nchar(motif) + 1L
     temp[temp < 0L] <- 0L
     n_sites <- sum(temp)
     # Get the number of motif occurrences
     n_match <- sum(vcountPattern(motif, seqs, fixed = FALSE))
+    
+    # Shuffle the sequences
+    seq_shuffled <- lapply(
+        shuffle_seeds,
+        \(x) shuffle_sequences(seqs, k = 2, nthreads = 4, rng.seed = x,
+                               method = "euler")
+        )
+    n_match_shuffled <- sapply(
+        seq_shuffled,
+        \(x) sum(vcountPattern(motif, x, fixed = FALSE))
+    ) |> sum()
+    
+    n_sites_shuffled <- n_sites * length(shuffle_seeds)
+    
     # run Poisson test
-    pt <- poisson.test(x = n_match, T = n_sites, r = prob_motif,
+    pt <- poisson.test(x = c(n_match, n_match_shuffled),
+                       T = c(n_sites, n_sites_shuffled),
                        alternative = "greater")
+    
     return(
         c(
             matches = n_match,
             sites = n_sites,
-            obs_rate = n_match / n_sites,
-            exp_rate = unname(prob_motif),
+            shuffled_matches = n_match_shuffled,
+            sites_shuffled = n_sites_shuffled,
+            rate_ratio = unname(pt$estimate),
             p_value = pt$p.value
         )
     )
 }
 ```
 
-Test how the rate compares to what is expected. One-sided since we only care about motifs more common than expected
+Test how the observed rate compares to the rate with shuffled sequences. One-sided since we only care about motifs more common than expected
 
-- For UGUANNNUA in P. vivax, P = 5.7e-124. The rate is 5.0e-4 compared to the expected of 2.9e-4.
+- For UGUANNNUA in P. vivax, P = 9.6e-26. The rate ratio is 1.26.
 
-- For UGUANNNUA in P. yoelii, P = 1; the observed rate of 9.7e-4 is lower than the expected rate of 1.0e-3.
+- For UGUANNNUA in P. yoelii, P = 1; the rate ratio is near 1.
 
-- For UGUAUAAUA in P. vivax, P = 5.9e-43, and we have a rate of 2.90e-5 as compared to the expected rate of 6.98e-6.
+- For UGUAUAAUA in P. vivax, P = 1e-3, and the rate ratio is 1.33.
 
-- For UGUAUAAUA in P. yoelii, P = 4.5e-11, and we have a rate of 8.89e-5 as compared to the expected rate of 6.20e-5.
+- For UGUAUAAUA in P. yoelii, P = 8.3e-7 and the rate ratio is 1.32.
 
 ```{r}
 test_motif_enrichment("UGUANNNUA", seq_pv_3utr_split)
@@ -190,12 +183,10 @@ Build data frame of results
 ```{r}
 enrich_df <- data.frame(Motif = all_motifs,
                         Matches_pv = all_tests_pv["matches",],
-                        Rate_ratio_pv = all_tests_pv["obs_rate",] /
-                            all_tests_pv["exp_rate",],
+                        Rate_ratio_pv = all_tests_pv["rate_ratio",],
                         Poisson_P_pv = all_tests_pv["p_value",],
                         Matches_py = all_tests_py["matches",],
-                        Rate_ratio_py = all_tests_py["obs_rate",] /
-                            all_tests_py["exp_rate",],
+                        Rate_ratio_py = all_tests_py["rate_ratio",],
                         Poisson_P_py = all_tests_py["p_value",])
 ```
 
@@ -214,7 +205,7 @@ View(enrich_df[enrich_df$FDR_global_pv < 0.05 |
                    enrich_df$FDR_global_py < 0.05,])
 ```
 
-There are 38 significantly enriched in P. vivax and 14 significantly enriched in P. yoelii. The seven motifs CCA, CAU, UAA, UAC, UAG, UCA, UUU, CA, GA, GC, UA, UC, and UG are enriched in both.
+There are 30 significantly enriched in P. vivax and 13 significantly enriched in P. yoelii. The 11 motifs CCA, CAU, UAA, UAC, UAG, UCA, UUU, CA, GC, UA, UC, and UG are enriched in both.
 
 ```{r}
 enriched_motifs_pv <- enrich_df$Motif[enrich_df$FDR_global_pv < 0.05]
@@ -267,12 +258,10 @@ all_tests_py <- sapply(
 ```{r}
 enrich_df_5utr <- data.frame(Motif = all_motifs,
                         Matches_pv = all_tests_pv["matches",],
-                        Rate_ratio_pv = all_tests_pv["obs_rate",] /
-                            all_tests_pv["exp_rate",],
+                        Rate_ratio_pv = all_tests_pv["rate_ratio",],
                         Poisson_P_pv = all_tests_pv["p_value",],
                         Matches_py = all_tests_py["matches",],
-                        Rate_ratio_py = all_tests_py["obs_rate",] /
-                            all_tests_py["exp_rate",],
+                        Rate_ratio_py = all_tests_py["rate_ratio",],
                         Poisson_P_py = all_tests_py["p_value",])
 ```
 
@@ -353,12 +342,10 @@ all_tests_py <- sapply(
 ```{r}
 enrich_df_cds <- data.frame(Motif = all_motifs,
                         Matches_pv = all_tests_pv["matches",],
-                        Rate_ratio_pv = all_tests_pv["obs_rate",] /
-                            all_tests_pv["exp_rate",],
+                        Rate_ratio_pv = all_tests_pv["rate_ratio",],
                         Poisson_P_pv = all_tests_pv["p_value",],
                         Matches_py = all_tests_py["matches",],
-                        Rate_ratio_py = all_tests_py["obs_rate",] /
-                            all_tests_py["exp_rate",],
+                        Rate_ratio_py = all_tests_py["rate_ratio",],
                         Poisson_P_py = all_tests_py["p_value",])
 ```
 
@@ -395,12 +382,12 @@ enrich_df$Global_FDR <- p.adjust(enrich_df$Poisson_P, method = "fdr")
 
 ```{r}
 #write.table(enrich_df,
-#            "../results/Motif_enrichment_2026-10-06.txt",
+#            "../results/Motif_enrichment_2026-10-08.txt",
 #            sep = "\t", row.names = FALSE, col.names = TRUE)
 ```
 
 ```{r}
-enrich_df <- read.table("../results/Motif_enrichment_2026-10-06.txt",
+enrich_df <- read.table("../results/Motif_enrichment_2026-10-08.txt",
                         sep = "\t", header = TRUE)
 ```
 
@@ -420,29 +407,32 @@ table(enrich_df_sig$Short, enrich_df_sig$Species)
 
 Overall enrichment of UGUANNNUA
 
+| Region           | Rate ratio | P-value |
+|------------------|------------|---------|
+| P. vivax 5' UTR  | 1.28       | 1.3e-32 |
+| P. vivax CDS     | 0.98       | 0.81    |
+| P. vivax 3' UTR  | 1.26       | 9.6e-26 |
+| P. yoelii 5' UTR | 0.96       | 1.0     |
+| P. yoelii CDS    | 0.65       | 1.0     |
+| P. yoelii 3' UTR | 0.94       | 1.0     |
+
 ```{r}
 temp <- test_motif_enrichment("UGUANNNUA", seq_pv_3utr_split)
-temp["obs_rate"]/temp["exp_rate"]
 temp
 
 temp <- test_motif_enrichment("UGUANNNUA", seq_pv_5utr_split)
-temp["obs_rate"]/temp["exp_rate"]
 temp
 
 temp <- test_motif_enrichment("UGUANNNUA", seq_pv_cds_split)
-temp["obs_rate"]/temp["exp_rate"]
 temp
 
 temp <- test_motif_enrichment("UGUANNNUA", seq_py_3utr)
-temp["obs_rate"]/temp["exp_rate"]
 temp
 
 temp <- test_motif_enrichment("UGUANNNUA", seq_py_5utr)
-temp["obs_rate"]/temp["exp_rate"]
 temp
 
 temp <- test_motif_enrichment("UGUANNNUA", seq_py_cds_splice)
-temp["obs_rate"]/temp["exp_rate"]
 temp
 ```
 
@@ -470,11 +460,59 @@ print(p)
 ```
 
 ```{r}
-pdf("../results/figure_components/enrichment_scatter_2026-10-06.pdf",
+pdf("../results/figure_components/enrichment_scatter_2026-10-08.pdf",
     width = 8.2, height = 5.5)
 print(p)
 dev.off()
 ```
+
+## Identify most highly enriched motifs, for downstream analysis
+
+```{r}
+sig_3utr_both <- enrich_df %>%
+    filter(Region == "3' UTR") %>%
+    group_by(Motif) %>%
+    summarize(Sig_both = all(Global_FDR < 0.05)) %>%
+    filter(Sig_both) %>%
+    pull(Motif)
+
+sig_3utr_both
+```
+
+Ten motifs were significantly enriched in the 3' UTRs of both P. vivax and P. yoelii
+
+- UGUA**CA**UA
+
+- UGUA**GC**UA
+
+- UGUA**UA**UA
+
+- UGUA**UG**UA
+
+- UGUA**CCA**UA
+
+- UGUA**CUA**UA
+
+- UGUA**UAA**UA
+
+- UGUA**UAC**UA
+
+- UGUA**UCA**UA
+
+- UGUA**UUU**UA
+
+```{r}
+sig_utr_all <- enrich_df %>%
+    filter(Region %in% c("3' UTR", "5' UTR")) %>%
+    group_by(Motif) %>%
+    summarize(Sig_both = all(Global_FDR < 0.05)) %>%
+    filter(Sig_both) %>%
+    pull(Motif)
+
+sig_utr_all
+```
+
+Reducing it to those that were significant in both the 3' and 5' UTRs in both species, we just have the four 8-nucleotide motifs.
 
 ## Assign motifs to genes
 
@@ -557,16 +595,16 @@ genes_by_motif_py_3utr <- split(matches_py$Gene[temp],
 ```
 
 ```{r}
-save(matches_pv, matches_py,
-     genes_by_motif_pv_txpt, genes_by_motif_py_txpt,
-     genes_by_motif_pv_3utr, genes_by_motif_py_3utr,
-     file = "../results/R_objects/matches_2026-05-28.RData")
+# save(matches_pv, matches_py,
+#      genes_by_motif_pv_txpt, genes_by_motif_py_txpt,
+#      genes_by_motif_pv_3utr, genes_by_motif_py_3utr,
+#      file = "../results/R_objects/matches_2026-10-08.RData")
 ```
 
 ## Motif enrichment in DGE
 
 ```{r}
-load("../results/R_objects/matches_2026-05-28.RData")
+load("../results/R_objects/matches_2026-10-08.RData")
 
 temp <- matches_pv$Region == "5' UTR"
 genes_by_motif_pv_5utr <- split(matches_pv$Gene[temp],
@@ -580,6 +618,8 @@ genes_by_motif_py_5utr <- split(matches_py$Gene[temp],
 res_pv <- read.table("../results/vivax_dge_results.txt",
                      sep = "\t", header = TRUE)
 ```
+
+### Probably delete below here
 
 Run FGSEA with the P. vivax DGE to see if any motifs from the 3' UTR are differentially expressed.
 
