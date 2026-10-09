@@ -436,6 +436,68 @@ temp <- test_motif_enrichment("UGUANNNUA", seq_py_cds_splice)
 temp
 ```
 
+Overall enrichment of UGUAHHHUA
+
+| Region           | Rate ratio | P-value |
+|------------------|------------|---------|
+| P. vivax 5' UTR  | 1.24       | 3.9e-17 |
+| P. vivax CDS     | 1.10       | 8.3e-4  |
+| P. vivax 3' UTR  | 1.35       | 1.4e-29 |
+| P. yoelii 5' UTR | 1.00       | 0.44    |
+| P. yoelii CDS    | 0.68       | 1.00    |
+| P. yoelii 3' UTR | 1.03       | 0.045   |
+
+```{r}
+temp <- test_motif_enrichment("UGUAHHHUA", seq_pv_3utr_split)
+temp
+
+temp <- test_motif_enrichment("UGUAHHHUA", seq_pv_5utr_split)
+temp
+
+temp <- test_motif_enrichment("UGUAHHHUA", seq_pv_cds_split)
+temp
+
+temp <- test_motif_enrichment("UGUAHHHUA", seq_py_3utr)
+temp
+
+temp <- test_motif_enrichment("UGUAHHHUA", seq_py_5utr)
+temp
+
+temp <- test_motif_enrichment("UGUAHHHUA", seq_py_cds_splice)
+temp
+```
+
+Overall enrichment of UGUAMHHUA (M = A or C, H = A, C, or T)
+
+| Region           | Rate ratio | P-value |
+|------------------|------------|---------|
+| P. vivax 5' UTR  | 1.23       | 3.8e-10 |
+| P. vivax CDS     | 1.02       | 0.31    |
+| P. vivax 3' UTR  | 1.36       | 7.3e-20 |
+| P. yoelii 5' UTR | 0.81       | 1.0     |
+| P. yoelii CDS    | 0.57       | 1.0     |
+| P. yoelii 3' UTR | 0.76       | 1.0     |
+
+```{r}
+temp <- test_motif_enrichment("UGUAMHHUA", seq_pv_3utr_split)
+temp
+
+temp <- test_motif_enrichment("UGUAMHHUA", seq_pv_5utr_split)
+temp
+
+temp <- test_motif_enrichment("UGUAMHHUA", seq_pv_cds_split)
+temp
+
+temp <- test_motif_enrichment("UGUAMHHUA", seq_py_3utr)
+temp
+
+temp <- test_motif_enrichment("UGUAMHHUA", seq_py_5utr)
+temp
+
+temp <- test_motif_enrichment("UGUAMHHUA", seq_py_cds_splice)
+temp
+```
+
 ## Visualize enrichment test
 
 This is a component of Supplementary Figure 5.
@@ -673,6 +735,87 @@ dge_enrich_df %>%
 #write.table(dge_enrich_df,
 #            file = "../results/DGE_enrichment_2026-10-09.txt",
 #            sep = "\t", row.names = FALSE, col.names = TRUE)
+```
+
+```{r}
+dge_enrich_df <- read.table("../results/DGE_enrichment_2026-10-09.txt",
+                            sep = "\t", header = TRUE)
+```
+
+Test some motif groups.
+
+```{r}
+mhh_motifs <- paste0(
+    "UGUA",
+    c("AAA", "AAC", "AAU", "ACA", "ACC", "ACU", "AUA", "AUC", "AUU",
+      "CAA", "CAC", "CAU", "CCA", "CCC", "CCU", "CUA", "CUC", "CUU"),
+    "UA"
+)
+
+uhh_motifs <- paste0(
+    "UGUA",
+    c("UAA", "UAC", "UAU", "UCA", "UCC", "UCU", "UUA", "UUC", "UUU"),
+    "UA"
+)
+
+hhh_motifs <- c(mhh_motifs, uhh_motifs)
+
+nn_motifs <- paste0(
+    "UGUA",
+    c("AA", "AC", "AG", "AU", "CA", "CC", "CG", "CU",
+      "GA", "GC", "GG", "GU", "UA", "UC", "UG", "UU"),
+    "UA"
+)
+```
+
+```{r}
+test_enrich <- function(motifs, gbm){
+    thesegenes <- gbm[motifs] |> unlist() |> unique()
+    temprows <- which(res_pv$Gene %in% thesegenes)
+    logFC_a <- res_pv$logFC[temprows]
+    logFC_b <- res_pv$logFC[-temprows]
+    myT <- t.test(logFC_a, logFC_b, alternative = "two.sided")
+    return(myT)
+}
+```
+
+The best result is UGUAMHHUA in the 3' UTR. These results also confirm that the 8-nucleotide motifs are not associated with gene expression.
+
+| Motif     | Region | Mean logFC with | Mean logFC w/o | P-value |
+|-----------|--------|-----------------|----------------|---------|
+| UGUAMHHUA | 3' UTR | -0.832          | -1.708         | 5.1e-6  |
+| UGUAMHHUA | 5' UTR | -1.566          | -1.651         | 0.66    |
+| UGUAHHHUA | 3' UTR | -1.182          | -1.700         | 0.0038  |
+| UGUAHHHUA | 5' UTR | -1.715          | -1.634         | 0.63    |
+| UGUANNUA  | 3' UTR | -1.502          | -1.702         | 0.090   |
+| UGUANNUA  | 5' UTR | -1.591          | -1.675         | 0.45    |
+
+```{r}
+test_enrich(mhh_motifs, genes_by_motif_pv_3utr)
+
+test_enrich(mhh_motifs, genes_by_motif_pv_5utr)
+
+test_enrich(hhh_motifs, genes_by_motif_pv_3utr)
+
+test_enrich(hhh_motifs, genes_by_motif_pv_5utr)
+
+test_enrich(nn_motifs, genes_by_motif_pv_3utr)
+
+test_enrich(nn_motifs, genes_by_motif_pv_5utr)
+```
+
+The P-value of UGUAMHHUA in the 3' UTR is a little better than UGUACAUUA although the difference in logFC is not as great.
+
+```{r}
+dge_enrich_df %>% filter(Motif == "UGUACAUUA" & Region == "3' UTR")
+```
+
+Most individual motifs in MHH have higher logFC than average, but AUU, CCC, and CUC are exceptions.
+
+```{r}
+dge_enrich_df %>%
+    filter(Motif %in% mhh_motifs & Region == "3' UTR") %>%
+    select(Motif, Mean_logFC_with, Pval_Ttest_twosided, N_genes)
 ```
 
 ## Visualize sequence enrichment and DGE together
