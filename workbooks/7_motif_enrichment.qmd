@@ -960,9 +960,11 @@ print(p)
 dev.off()
 ```
 
-Ranking of genes by logFC, labeling the genes with UGUACAUUA. This is a component of Supplemental Figure 5.
+Ranking of genes by logFC, labeling the genes with UGUACAUUA. This is a component of Supplemental Figure 5. May eliminate if focusing on UGUAMHHUA.
 
 ```{r}
+res_pv$UGUACAUUA_3UTR <- res_pv$Gene %in% genes_by_motif_pv_3utr[["UGUACAUUA"]]
+
 res_pv$Rank <- rank(res_pv$logFC)
 
 midrank <- nrow(res_pv) / 2
@@ -1107,34 +1109,28 @@ expr_ortho_yli <- ortho_df$Yoelii_gene[ortho_df$Expressed_both]
 Get names of genes with motifs of interest.
 
 ```{r}
-motifs_of_interest <- paste0(
-    "UGUA",
-    c("AAA", "AAU", "AUA", "AUU", "UAA", "UAU", "UUA", "UUU", "CAU"),
-    "UA"
-)
+motif_genes_pv_3utr <- mhh_3utr_genes
 
-motif_genes_pv_txpt <- genes_by_motif_pv_txpt[motifs_of_interest] |> unlist() |> unique()
-
-motif_genes_py_txpt <- genes_by_motif_py_txpt[motifs_of_interest] |> unlist() |> unique()
+motif_genes_py_3utr <- genes_by_motif_py_3utr[mhh_motifs] |> unlist() |> unique()
 ```
 
-Out of these 3511 expressed orthologs, 496 have motifs in both species, 153 have motifs in vivax only, 1941 have motifs in yoelii only, and 921 have motifs in neither. There is significantly more overlap than expected under the null hypothesis.
+Out of these 3511 expressed orthologs, 49 have motifs in both species, 185 have motifs in vivax only, 627 have motifs in yoelii only, and 2650 have motifs in neither. The odds ratio is close to one and not significant.
 
 ```{r}
-sum(expr_ortho_vvx %in% motif_genes_pv_txpt &
-        expr_ortho_yli %in% motif_genes_py_txpt)
+sum(expr_ortho_vvx %in% motif_genes_pv_3utr &
+        expr_ortho_yli %in% motif_genes_py_3utr)
 
-sum(expr_ortho_vvx %in% motif_genes_pv_txpt &
-        !expr_ortho_yli %in% motif_genes_py_txpt)
+sum(expr_ortho_vvx %in% motif_genes_pv_3utr &
+        !expr_ortho_yli %in% motif_genes_py_3utr)
 
-sum(!expr_ortho_vvx %in% motif_genes_pv_txpt &
-        expr_ortho_yli %in% motif_genes_py_txpt)
+sum(!expr_ortho_vvx %in% motif_genes_pv_3utr &
+        expr_ortho_yli %in% motif_genes_py_3utr)
 
-sum(!expr_ortho_vvx %in% motif_genes_pv_txpt &
-        !expr_ortho_yli %in% motif_genes_py_txpt)
+sum(!expr_ortho_vvx %in% motif_genes_pv_3utr &
+        !expr_ortho_yli %in% motif_genes_py_3utr)
 
-chisq.test(matrix(c(496, 153, 1941, 921), nrow = 2, ncol = 2))
-fisher.test(matrix(c(496, 153, 1941, 921), nrow = 2, ncol = 2))
+chisq.test(matrix(c(49, 185, 627, 2650), nrow = 2, ncol = 2))
+fisher.test(matrix(c(49, 185, 627, 2650), nrow = 2, ncol = 2))
 ```
 
 Draw the Venn diagram that is part of Figure 5.
@@ -1143,24 +1139,24 @@ Draw the Venn diagram that is part of Figure 5.
 #| fig.height: 7
 #| fig.width: 7
 scl <- 0.65
-r_vvx <- sqrt(496+153) * scl
-r_yli <- sqrt(496+1941) * scl
+r_vvx <- sqrt(49+185) * scl
+r_yli <- sqrt(49+627) * scl
 r_all <- sqrt(3511) * scl
 
-#pdf("../results/figure_components/venn_2026-06-11.pdf",
+#pdf("../results/figure_components/venn_2026-10-09.pdf",
 #    width = 7, height = 7)
-#svg("../results/figure_components/venn_2026-06-11.svg",
+#svg("../results/figure_components/venn_2026-10-09.svg",
 #    width = 7, height = 7)
 plot(c(0, 0, 101, 101), c(0, 101, 0, 101), col = "white", col.axis = "white",
      col.lab = "white", col.main = "white",
      fg = "white")
-draw.circle(50, 29, radius = r_vvx, lwd = 3, col = "#00000025")
+draw.circle(50, 34, radius = r_vvx, lwd = 3, col = "#00000025")
 draw.circle(50, 55, radius = r_yli, lwd = 3, col = "#00000025")
 draw.circle(50, 50, radius = r_all, lwd = 3)
-text(50, c(14.5, 30, 70), c("153", "496", "1941"), cex = 2, family = "Arial")
+text(50, c(30, 40, 55), c("185", "49", "627"), cex = 2, family = "Arial")
 text(50, 3, expression(paste(italic("P. vivax"), " P01")), cex = 2, family = "Arial")
 text(50, 97, expression(paste(italic("P. yoelii"), " 17X")), cex = 2, family = "Arial")
-text(72.1, 21.5, "921", cex = 2, family = "Arial")
+text(72.1, 30, "2650", cex = 2, family = "Arial")
 #dev.off()
 ```
 
