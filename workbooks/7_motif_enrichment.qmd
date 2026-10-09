@@ -919,6 +919,8 @@ expr_ortho_yli <- ortho_df$Yoelii_gene[ortho_df$Expressed_both]
 Get names of genes with motifs of interest.
 
 ```{r}
+mhh_3utr_genes <- genes_by_motif_pv_3utr[mhh_motifs] |> unlist() |> unique()
+
 motif_genes_pv_3utr <- mhh_3utr_genes
 
 motif_genes_py_3utr <- genes_by_motif_py_3utr[mhh_motifs] |> unlist() |> unique()
@@ -970,7 +972,7 @@ text(72.1, 30, "2650", cex = 2, family = "Arial")
 #dev.off()
 ```
 
-Check gene expression changes for the 49 conserved genes. They have higher log-fold-changes than other genes, and higher than non-conserved genes with the motif. TODO consider marking these in the Volcano plot.
+Check gene expression changes for the 49 conserved genes. They have higher log-fold-changes than other genes, and higher than non-conserved genes with the motif.
 
 ```{r}
 genes_conserved_mhh <- expr_ortho_vvx[expr_ortho_vvx %in% motif_genes_pv_3utr &
@@ -987,11 +989,20 @@ summary(res_pv$logFC[res_pv$Gene %in%
 Redraw the volcano plot, showing if there is UGUAMHHUA in the 3' UTR of the transcript. This is a component of Figure 5. Of the genes we tested in DGE, 244 out of 3326 have this motif.
 
 ```{r}
-mhh_3utr_genes <- genes_by_motif_pv_3utr[mhh_motifs] |> unlist() |> unique()
-
-res_pv$UGUAMHHUA_3UTR <- res_pv$Gene %in% mhh_3utr_genes
+res_pv$UGUAMHHUA_3UTR <- "No"
+res_pv$UGUAMHHUA_3UTR[res_pv$Gene %in% mhh_3utr_genes] <- "Yes"
+res_pv$UGUAMHHUA_3UTR[res_pv$Gene %in% genes_conserved_mhh] <- "Conserved"
+res_pv$UGUAMHHUA_3UTR <- factor(res_pv$UGUAMHHUA_3UTR,
+                                levels = c("No", "Yes", "Conserved"))
 
 table(res_pv$UGUAMHHUA_3UTR)
+
+t.test(res_pv$logFC[res_pv$UGUAMHHUA_3UTR == "Yes"],
+       res_pv$logFC[res_pv$UGUAMHHUA_3UTR == "Conserved"],
+       alternative = "two.sided") # P = 0.0057
+t.test(res_pv$logFC[res_pv$UGUAMHHUA_3UTR == "No"],
+       res_pv$logFC[res_pv$UGUAMHHUA_3UTR == "Yes"],
+       alternative = "two.sided") # P = 0.0012
 ```
 
 ```{r}
@@ -1007,10 +1018,14 @@ p <- res_pv %>%
     geom_point(aes(color = UGUAMHHUA_3UTR)) +
     annotate("text", x = 7.5, y = c(2, -2),
              label = c("Hypnozoite-enriched", "Schizont-enriched")) +
-    scale_color_manual(values = c("black", "red"), guide = "none") +
+    scale_color_manual(values = c("black", "firebrick1", "steelblue1"),
+                       guide = "none") +
     annotate("text", x = 5.3, y = 5.2, label = "Red =\nUGUAMHHUA\nin 3' UTR",
-             color = "red") +
-    annotate("text", x = 9.5, y = 7, label = "P =\n5.1e-6", color = "red") +
+             color = "firebrick1") +
+    annotate("text", x = 8.8, y = 5.7,
+             label = "Blue =\nUGUAMHHUA\nconserved\nPv & Py",
+             color = "steelblue1") +
+    #annotate("text", x = 9.5, y = 7, label = "P =\n5.1e-6", color = "red") +
     theme_classic(base_size = 10, base_family = "Arial") +
     theme(legend.position = "inside",
           legend.position.inside = c(0.8, 0.87),
