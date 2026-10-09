@@ -702,12 +702,27 @@ ggplot(aes(x = Rate_ratio, y = Mean_logFC_with)) +
 Build a grid to show concordance across motifs
 
 ```{r}
+combined_df$FDR_enriched_Pv <- "≥0.2"
+combined_df$FDR_enriched_Pv[combined_df$Global_FDR.x < 0.2] <- "<0.2"
+combined_df$FDR_enriched_Pv[combined_df$Global_FDR.x < 0.05] <- "<0.05"
+
+combined_df$FDR_DGE_Pv <- "≥0.2"
+combined_df$FDR_DGE_Pv[combined_df$Global_FDR.y < 0.2] <- "<0.2"
+combined_df$FDR_DGE_Pv[combined_df$Global_FDR.y < 0.05] <- "<0.05"
+combined_df$FDR_DGE_Pv[is.na(combined_df$Global_FDR.y)] <- NA
+
+yoelii_df <- filter(enrich_df, Species == "*P. yoelii* 17X" &
+                        Region %in% c("3' UTR", "5' UTR"))
+yoelii_df$FDR_enriched_Py <- "≥0.2"
+yoelii_df$FDR_enriched_Py[yoelii_df$Global_FDR < 0.2] <- "<0.2"
+yoelii_df$FDR_enriched_Py[yoelii_df$Global_FDR < 0.05] <- "<0.05"
+
 grid_prep <- combined_df %>%
-    mutate(Sig_enriched = Global_FDR.x < 0.05,
-           Sig_DGE = Global_FDR.y < 0.05) %>%
-    select(Motif, Region, Sig_enriched, Sig_DGE) %>%
-    tidyr::pivot_longer(cols = starts_with("Sig_"), names_prefix = "Sig_",
-                        names_to = "Test", values_to = "Significant") %>%
+    dplyr::select(Motif, Region, FDR_enriched_Pv, FDR_DGE_Pv) %>%
+    left_join(select(yoelii_df, Motif, Region, FDR_enriched_Py),
+              by = c("Motif", "Region")) %>%
+    tidyr::pivot_longer(cols = starts_with("FDR_"), names_prefix = "FDR_",
+                        names_to = "Test", values_to = "FDR") %>%
     mutate(Test1 = paste(Region, Test),
            Short = substring(Motif, 5, nchar(Motif) - 2))
 
@@ -717,16 +732,26 @@ grid_prep$Motif_category[grep("^UGUA[UCA]{3}UA$", grid_prep$Motif)] <- "9nuc HHH
 ```
 
 ```{r}
-#| fig.width: 5
-#| fig.height: 12
-grid_prep %>%
-    filter(!is.na(Significant)) %>%
+#| fig.width: 6
+#| fig.height: 12.5
+p <- grid_prep %>%
+    filter(!is.na(FDR)) %>%
 ggplot(aes(x = Test, y = Motif)) +
-    geom_tile(aes(fill = Significant), width = 1, height = 1, color = "black") +
-    geom_text(aes(label = Short), data = filter(grid_prep, Significant)) +
+    geom_tile(aes(fill = FDR), width = 1, height = 1, color = "black") +
+    geom_text(aes(label = Short), data = filter(grid_prep, FDR == "<0.05")) +
     facet_grid(rows = vars(Motif_category), cols = vars(Region),
                scales = "free_y", space = "free_y") +
-    scale_fill_manual(values = c("white", "lightgreen"))
+    scale_fill_manual(values = c("≥0.2" = "white", "<0.2" = "lightblue",
+                                 "<0.05" = "lightgreen")) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+print(p)
+```
+
+```{r}
+pdf("../results/figure_components/motif_significance_grid_2026-10-09.pdf",
+    width = 6, height = 12.5)
+print(p)
+dev.off()
 ```
 
 ### Probably delete below here
