@@ -22,6 +22,7 @@ library(jsonlite)
 library(plotrix)
 library(showtext)
 library(universalmotif)
+library(ggExtra)
 
 font_add("Arial", regular = "arial.ttf", bold = "arialbd.ttf",
          italic = "ariali.ttf", bolditalic = "arialbi.ttf")
@@ -907,43 +908,53 @@ dev.off()
 
 ## Volcano plot
 
-Redraw the volcano plot, showing if there is UGUACAUUA in the 3' UTR of the transcript. This is a component of Figure 5.
+Redraw the volcano plot, showing if there is UGUAMHHUA in the 3' UTR of the transcript. This is a component of Figure 5. Of the genes we tested in DGE, 244 out of 3326 have this motif.
+
+```{r}
+mhh_3utr_genes <- genes_by_motif_pv_3utr[mhh_motifs] |> unlist() |> unique()
+
+res_pv$UGUAMHHUA_3UTR <- res_pv$Gene %in% mhh_3utr_genes
+
+table(res_pv$UGUAMHHUA_3UTR)
+```
 
 ```{r}
 #| fig.width: 4
 #| fig.height: 3.5
-res_pv$UGUACAUUA_3UTR <- grepl("UGUACAUUA", res_pv$Motif_3UTR)
-
 pcutoff <- max(res_pv$PValue[res_pv$FDR < 0.05])
 
 p <- res_pv %>%
-    arrange(UGUACAUUA_3UTR) %>%
+    arrange(UGUAMHHUA_3UTR) %>%
     ggplot(aes(x = -log10(PValue), y = logFC)) +
     geom_vline(xintercept = -log10(pcutoff), lty = 2) +
     geom_hline(yintercept = c(-1, 1), lty = 2) +
-    geom_point(aes(color = UGUACAUUA_3UTR)) +
+    geom_point(aes(color = UGUAMHHUA_3UTR)) +
     annotate("text", x = 7.5, y = c(2, -2),
              label = c("Hypnozoite-enriched", "Schizont-enriched")) +
     scale_color_manual(values = c("black", "red"), guide = "none") +
-    annotate("text", x = 5.2, y = 5.2, label = "Red =\nUGUACAUUA\nin 3' UTR",
+    annotate("text", x = 5.3, y = 5.2, label = "Red =\nUGUAMHHUA\nin 3' UTR",
              color = "red") +
+    annotate("text", x = 9.5, y = 7, label = "P =\n5.1e-6", color = "red") +
     theme_classic(base_size = 10, base_family = "Arial") +
     theme(legend.position = "inside",
           legend.position.inside = c(0.8, 0.87),
           legend.background = element_rect(color = "black", linetype = "solid"))
 
+p <- ggMarginal(p, type = "boxplot", margins = "y", 
+                groupFill = TRUE, groupColour = TRUE)
+
 print(p)
 ```
 
 ```{r}
-pdf("../results/figure_components/volcano_2026-06-10.pdf",
+pdf("../results/figure_components/volcano_2026-10-09.pdf",
     height = 3.35, width = 3.82)
 print(p)
 dev.off()
 ```
 
 ```{r}
-svg("../results/figure_components/volcano_2026-06-10.svg",
+svg("../results/figure_components/volcano_2026-10-09.svg",
     height = 3.35, width = 3.82)
 print(p)
 dev.off()
