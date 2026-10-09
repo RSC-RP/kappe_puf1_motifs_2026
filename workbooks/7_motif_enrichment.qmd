@@ -669,6 +669,14 @@ dge_enrich_df %>%
     filter(Global_FDR < 0.05)
 ```
 
+```{r}
+#write.table(dge_enrich_df,
+#            file = "../results/DGE_enrichment_2026-10-09.txt",
+#            sep = "\t", row.names = FALSE, col.names = TRUE)
+```
+
+## Visualize sequence enrichment and DGE together
+
 Compare sequence enrichment with differential gene expression
 
 ```{r}
@@ -752,136 +760,6 @@ pdf("../results/figure_components/motif_significance_grid_2026-10-09.pdf",
     width = 6, height = 12.5)
 print(p)
 dev.off()
-```
-
-### Probably delete below here
-
-Run FGSEA with the P. vivax DGE to see if any motifs from the 3' UTR are differentially expressed.
-
-```{r}
-mystat <- res_pv$logFC
-names(mystat) <- res_pv$Gene
-
-set.seed(528)
-fgsea_motifs_pv <- fgsea(genes_by_motif_pv_3utr, mystat)
-```
-
-UGUA**ACU**UA and UGUA**CAU**UA, which have eight and 25 genes, respectively, that were tested in DGE, were significant in the FGSEA and have positive enrichment scores, which mean higher expression in hypnozoite as compared to schizont. CAU also had a rate ratio significantly higher than 1 in 3' and 5' UTRs.
-
-```{r}
-min(fgsea_motifs_pv$pval, na.rm = TRUE) # 0.0002
-min(fgsea_motifs_pv$padj, na.rm = TRUE) # 0.015
-
-fgsea_motifs_pv %>%
-    filter(padj < 0.1) %>%
-    select(pathway, pval, NES, size)
-```
-
-```{r}
-temp <- filter(enrich_df, Species == "*P. vivax* P01",
-               Region == "3' UTR")
-fgsea_motifs_pv$Poisson_rate_ratio <-
-    temp$Rate_ratio[match(fgsea_motifs_pv$pathway, temp$Motif)]
-```
-
-The WWW motifs all seem to be associated with reduced expression in the hypnozoite, but the CAU motif is associated with increased expression in the hypnozoite. Maybe we want to treat these two motifs separately.
-
-```{r}
-ggplot(fgsea_motifs_pv, aes(x = Poisson_rate_ratio, y = NES)) +
-    geom_text(aes(label = substring(pathway, 5, 7)))
-```
-
-Try without FGSEA. Characterize the DGE results by what type of motif each gene has.
-
-```{r}
-motifs_www <- paste0(
-    "UGUA",
-    c("AAA", "AAU", "AUA", "AUU", "UAA", "UAU", "UUA", "UUU"),
-    "UA"
-)
-
-genes_www_3utr <- genes_by_motif_pv_3utr[motifs_www] |> unlist() |> unique()
-genes_www_3utr <- intersect(genes_www_3utr, res_pv$Gene) # 204 genes
-
-genes_cau_3utr <- intersect(genes_by_motif_pv_3utr[["UGUACAUUA"]], res_pv$Gene) # 25 genes
-
-intersect(genes_www_3utr, genes_cau_3utr) # seven have both!
-
-res_pv$Motif_3UTR <- "None"
-res_pv$Motif_3UTR[res_pv$Gene %in% unlist(genes_by_motif_pv_3utr)] <- "Other UGUANNNUA"
-res_pv$Motif_3UTR[res_pv$Gene %in% genes_www_3utr] <- "UGUAWWWUA"
-res_pv$Motif_3UTR[res_pv$Gene %in% genes_cau_3utr] <- "UGUACAUUA"
-res_pv$Motif_3UTR[res_pv$Gene %in% genes_www_3utr & 
-                       res_pv$Gene %in% genes_cau_3utr] <- "UGUAWWWUA and UGUACAUUA"
-
-table(res_pv$Motif_3UTR)
-
-genes_www_5utr <- genes_by_motif_pv_5utr[motifs_www] |> unlist() |> unique()
-genes_www_5utr <- intersect(genes_www_5utr, res_pv$Gene) # 250 genes
-
-genes_cau_5utr <- intersect(genes_by_motif_pv_5utr[["UGUACAUUA"]], res_pv$Gene) # 42 genes
-
-intersect(genes_www_5utr, genes_cau_5utr) # eight have both
-
-res_pv$Motif_5UTR <- "None"
-res_pv$Motif_5UTR[res_pv$Gene %in% unlist(genes_by_motif_pv_5utr)] <- "Other UGUANNNUA"
-res_pv$Motif_5UTR[res_pv$Gene %in% genes_www_5utr] <- "UGUAWWWUA"
-res_pv$Motif_5UTR[res_pv$Gene %in% genes_cau_5utr] <- "UGUACAUUA"
-res_pv$Motif_5UTR[res_pv$Gene %in% genes_www_5utr & 
-                       res_pv$Gene %in% genes_cau_5utr] <- "UGUAWWWUA and UGUACAUUA"
-
-table(res_pv$Motif_5UTR)
-
-genes_www_txpt <- genes_by_motif_pv_txpt[motifs_www] |> unlist() |> unique()
-genes_www_txpt <- intersect(genes_www_txpt, res_pv$Gene) # 659 genes
-
-genes_cau_txpt <- intersect(genes_by_motif_pv_txpt[["UGUACAUUA"]], res_pv$Gene) # 113 genes
-
-intersect(genes_www_txpt, genes_cau_txpt) # 32 have
-
-res_pv$Motif_Transcript <- "None"
-res_pv$Motif_Transcript[res_pv$Gene %in% unlist(genes_by_motif_pv_txpt)] <-
-    "Other UGUANNNUA"
-res_pv$Motif_Transcript[res_pv$Gene %in% genes_www_txpt] <- "UGUAWWWUA"
-res_pv$Motif_Transcript[res_pv$Gene %in% genes_cau_txpt] <- "UGUACAUUA"
-res_pv$Motif_Transcript[res_pv$Gene %in% genes_www_txpt & 
-                       res_pv$Gene %in% genes_cau_txpt] <- "UGUAWWWUA and UGUACAUUA"
-
-table(res_pv$Motif_Transcript)
-```
-
-We can definitely see CAU with higher expression than others.
-
-```{r}
-ggplot(res_pv, aes(x = Motif_3UTR, y = logFC)) +
-    geom_violin(quantile.linetype = 1) +
-    geom_point(alpha = 0.2)
-```
-
-The difference is definitely significant for the CAU motif (P = 2.8e-5 in two-sided test). For WWW the mean logFC is slighly higher, but P = 0.13.
-
-```{r}
-cau_rows <- grep("UGUACAUUA", res_pv$Motif_3UTR)
-t.test(res_pv$logFC[cau_rows], res_pv$logFC[-cau_rows])
-
-www_rows <- grep("UGUAWWWUA", res_pv$Motif_3UTR)
-t.test(res_pv$logFC[www_rows], res_pv$logFC[-www_rows])
-```
-
-The CAU effect largely goes away when we look at the whole transcript (P = 0.012). Again the logFC for WWW is slightly higher than without that motif, but P = 0.06.
-
-```{r}
-ggplot(res_pv, aes(x = Motif_Transcript, y = logFC)) +
-    geom_violin(quantile.linetype = 1) +
-    geom_point(alpha = 0.2)
-```
-
-```{r}
-cau_rows <- grep("UGUACAUUA", res_pv$Motif_Transcript)
-t.test(res_pv$logFC[cau_rows], res_pv$logFC[-cau_rows])
-
-www_rows <- grep("UGUAWWWUA", res_pv$Motif_Transcript)
-t.test(res_pv$logFC[www_rows], res_pv$logFC[-www_rows])
 ```
 
 ## Volcano plot
