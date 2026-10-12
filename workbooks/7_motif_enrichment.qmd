@@ -1526,7 +1526,7 @@ dev.off()
 ```{r}
 temp1 <- matches_pv %>%
     filter(Gene %in% expr_ortho_vvx) %>%
-    filter(Motif %in% motifs_of_interest) %>%
+    filter(Motif %in% mhh_motifs) %>%
     group_by(Region, Gene) %>%
     summarize(Motifs_per_gene = n()) %>%
     summarize(One_motif = sum(Motifs_per_gene == 1),
@@ -1538,7 +1538,7 @@ temp1$Species <- "*P. vivax* P01"
 
 temp2 <- matches_py %>%
     filter(Gene %in% expr_ortho_yli) %>%
-    filter(Motif %in% motifs_of_interest) %>%
+    filter(Motif %in% mhh_motifs) %>%
     group_by(Region, Gene) %>%
     summarize(Motifs_per_gene = n()) %>%
     summarize(One_motif = sum(Motifs_per_gene == 1),
@@ -1552,11 +1552,13 @@ plot_df <- rbind(temp1, temp2)
 plot_df$Number_motifs[plot_df$Number_motifs == "One_motif"] <- "1"
 plot_df$Number_motifs[plot_df$Number_motifs == "Multi_motif"] <- ">1"
 
+plot_df$Region <- factor(plot_df$Region, levels = c("3' UTR", "CDS", "5' UTR"))
+
 anno_df <- plot_df %>%
     group_by(Region, Species) %>%
     summarize(Total = sum(Number_of_transcripts))
 # Dummy variable for x-axis placement
-anno_df$Number_of_transcripts <- rep(c(100, 500), times = 3)
+anno_df$Number_of_transcripts <- rep(c(100, 300), times = 3)
 ```
 
 This barchart is a component of Figure 5.
@@ -1577,14 +1579,14 @@ print(p)
 ```
 
 ```{r}
-pdf("../results/figure_components/barplot_gene_region_2026-06-10.pdf",
+pdf("../results/figure_components/barplot_gene_region_2026-10-12.pdf",
     height = 2, width = 3)
 print(p)
 dev.off()
 ```
 
 ```{r}
-svg("../results/figure_components/barplot_gene_region_2026-06-10.svg",
+svg("../results/figure_components/barplot_gene_region_2026-10-12.svg",
     height = 2, width = 3)
 print(p)
 dev.off()
