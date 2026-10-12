@@ -1367,6 +1367,56 @@ lollipop <- function(df){
 }
 ```
 
+### UGUAMHHUA in the 3' UTR
+
+```{r}
+fora_pv_only_mhh_3utr <- fora(
+    Pv_go_anno,
+    expr_ortho_vvx[expr_ortho_vvx %in% motif_genes_pv_3utr &
+                       !expr_ortho_yli %in% motif_genes_py_3utr],
+    expr_ortho_vvx)
+
+fora_pv_both_mhh_3utr <- fora(
+    Pv_go_anno,
+    expr_ortho_vvx[expr_ortho_vvx %in% motif_genes_pv_3utr &
+                       expr_ortho_yli %in% motif_genes_py_3utr],
+    expr_ortho_vvx)
+
+fora_py_only_mhh_3utr <- fora(
+    Py_go_anno,
+    expr_ortho_yli[!expr_ortho_vvx %in% motif_genes_pv_3utr &
+                       expr_ortho_yli %in% motif_genes_py_3utr &
+                       !duplicated(expr_ortho_yli)],
+    expr_ortho_yli[!duplicated(expr_ortho_yli)])
+
+fora_py_both_mhh_3utr <- fora(
+    Py_go_anno,
+    expr_ortho_yli[expr_ortho_vvx %in% motif_genes_pv_3utr &
+                       expr_ortho_yli %in% motif_genes_py_3utr &
+                       !duplicated(expr_ortho_yli)],
+    expr_ortho_yli[!duplicated(expr_ortho_yli)])
+
+#save(fora_pv_both_mhh_3utr,
+#     fora_pv_only_mhh_3utr,
+#     fora_py_both_mhh_3utr,
+#     fora_py_only_mhh_3utr,
+#     file = "../results/R_objects/fora_2026-10-12.RData")
+```
+
+None really reach a reasonable level of significance.
+
+```{r}
+min(fora_pv_only_mhh_3utr$padj)
+min(fora_pv_both_mhh_3utr$padj)
+min(fora_py_only_mhh_3utr$padj)
+min(fora_py_both_mhh_3utr$padj)
+
+min(fora_pv_only_mhh_3utr$pval)
+min(fora_pv_both_mhh_3utr$pval)
+min(fora_py_only_mhh_3utr$pval)
+min(fora_py_both_mhh_3utr$pval)
+```
+
 ### Either motif anywhere in the transcript
 
 Using the gene sets from the Venn diagram.
