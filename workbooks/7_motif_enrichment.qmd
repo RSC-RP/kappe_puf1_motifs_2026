@@ -69,7 +69,7 @@ seq_pv_3utr_2 <- BSgenome::getSeq(fasta_pv, pred_pv_3utr)
 names(seq_pv_3utr_2) <- pred_pv_3utr$gene_id
 
 seq_pv_3utr <- c(seq_pv_3utr_1, seq_pv_3utr_2)
-rm(seq_pv_3utr_1, seq_pv_3utr_2)
+rm(seq_pv_3utr_2)
 
 pred_py_3utr <- fix_widths(pred_py_3utr, fasta_py)
 
@@ -77,10 +77,12 @@ seq_py_3utr <- BSgenome::getSeq(fasta_py, pred_py_3utr)
 names(seq_py_3utr) <- pred_py_3utr$gene_id
 ```
 
-Eliminate stretches of N's in the vivax 3' UTRs
+Eliminate stretches of N's in the vivax 3' UTRs. Make a separate object for annotated UTRs only.
 
 ```{r}
 seq_pv_3utr_split <- unlist(strsplit(seq_pv_3utr, "N"))
+
+seq_pv_3utr_anno_split <- unlist(strsplit(seq_pv_3utr_1, "N"))
 ```
 
 Function to run test for enrichment. I had previously used mononucleotide, then dinucleotide frequencies, across all provided sequences to predict the null rate for the motif. At a reviewer's recommendation I tried shuffling the sequences and then running the test, which I still found to be significant although not as much. This is probably because mononucleotide and dinucleotide frequencies are not uniform across the sequences. So, instead I am now using shuffled sequences to create my null expectation for the motif rate.
@@ -147,7 +149,7 @@ test_motif_enrichment("UGUAUAAUA", seq_pv_3utr_split)
 test_motif_enrichment("UGUAUAAUA", seq_py_3utr)
 ```
 
-Test all UGUANNNUA and UGUANNUA motifs.
+Test all UGUANNNUA and UGUANNUA motifs. For P. vivax, test predicted and annotated UTRs together, and just predicted UTRs alone.
 
 ```{r}
 letters <- c("A", "C", "G", "U")
@@ -172,6 +174,12 @@ all_tests_pv <- sapply(
     seqs = seq_pv_3utr_split
 )
 
+all_tests_pv_anno <- sapply(
+    all_motifs,
+    test_motif_enrichment,
+    seqs = seq_pv_3utr_anno_split
+)
+
 all_tests_py <- sapply(
     all_motifs,
     test_motif_enrichment,
@@ -186,6 +194,9 @@ enrich_df <- data.frame(Motif = all_motifs,
                         Matches_pv = all_tests_pv["matches",],
                         Rate_ratio_pv = all_tests_pv["rate_ratio",],
                         Poisson_P_pv = all_tests_pv["p_value",],
+                        Matches_pv_anno = all_tests_pv_anno["matches",],
+                        Rate_ratio_pv_anno = all_tests_pv_anno["rate_ratio",],
+                        Poisson_P_pv_anno = all_tests_pv_anno["p_value",],
                         Matches_py = all_tests_py["matches",],
                         Rate_ratio_py = all_tests_py["rate_ratio",],
                         Poisson_P_py = all_tests_py["p_value",])
@@ -194,11 +205,13 @@ enrich_df <- data.frame(Motif = all_motifs,
 See what Benjamini and Hochberg have to say about it
 
 ```{r}
-padj <- p.adjust(c(enrich_df$Poisson_P_pv, enrich_df$Poisson_P_py),
+padj <- p.adjust(c(enrich_df$Poisson_P_pv, enrich_df$Poisson_P_pv_anno,
+                   enrich_df$Poisson_P_py),
                  method = "fdr")
 
 enrich_df$FDR_global_pv <- padj[1:80]
-enrich_df$FDR_global_py <- padj[81:160]
+enrich_df$FDR_global_pv_anno <- padj[81:160]
+enrich_df$FDR_global_py <- padj[161:240]
 ```
 
 ```{r}
@@ -206,10 +219,11 @@ View(enrich_df[enrich_df$FDR_global_pv < 0.05 |
                    enrich_df$FDR_global_py < 0.05,])
 ```
 
-There are 30 significantly enriched in P. vivax and 13 significantly enriched in P. yoelii. The 11 motifs CCA, CAU, UAA, UAC, UAG, UCA, UUU, CA, GC, UA, UC, and UG are enriched in both.
+There are 30 significantly enriched in P. vivax and 14 significantly enriched in P. yoelii. The 11 motifs CCA, CAU, UAA, UAC, UCA, UUU, CA, GC, UA, UC, and UG are enriched in both. If we only look at annotated (not predicted) 3' UTRs in P. vivax, we also get 30 significantly enriched motifs, 26 of which overlap.
 
 ```{r}
 enriched_motifs_pv <- enrich_df$Motif[enrich_df$FDR_global_pv < 0.05]
+enriched_motifs_pv_anno <- enrich_df$Motif[enrich_df$FDR_global_pv_anno < 0.05]
 enriched_motifs_py <- enrich_df$Motif[enrich_df$FDR_global_py < 0.05]
 ```
 
@@ -230,7 +244,7 @@ seq_pv_5utr_2 <- BSgenome::getSeq(fasta_pv, pred_pv_5utr)
 names(seq_pv_5utr_2) <- pred_pv_5utr$gene_id
 
 seq_pv_5utr <- c(seq_pv_5utr_1, seq_pv_5utr_2)
-rm(seq_pv_5utr_1, seq_pv_5utr_2)
+rm(seq_pv_5utr_2)
 
 pred_py_5utr <- fix_widths(pred_py_5utr, fasta_py)
 
@@ -238,6 +252,8 @@ seq_py_5utr <- BSgenome::getSeq(fasta_py, pred_py_5utr)
 names(seq_py_5utr) <- pred_py_5utr$gene_id
 
 seq_pv_5utr_split <- unlist(strsplit(seq_pv_5utr, "N"))
+
+seq_pv_5utr_anno_split <- unlist(strsplit(seq_pv_5utr_1, "N"))
 ```
 
 Run enrichment tests in 5' UTR and build results table
@@ -247,6 +263,12 @@ all_tests_pv <- sapply(
     all_motifs,
     test_motif_enrichment,
     seqs = seq_pv_5utr_split
+)
+
+all_tests_pv_anno <- sapply(
+    all_motifs,
+    test_motif_enrichment,
+    seqs = seq_pv_5utr_anno_split
 )
 
 all_tests_py <- sapply(
@@ -261,23 +283,30 @@ enrich_df_5utr <- data.frame(Motif = all_motifs,
                         Matches_pv = all_tests_pv["matches",],
                         Rate_ratio_pv = all_tests_pv["rate_ratio",],
                         Poisson_P_pv = all_tests_pv["p_value",],
+                        Matches_pv_anno = all_tests_pv_anno["matches",],
+                        Rate_ratio_pv_anno = all_tests_pv_anno["rate_ratio",],
+                        Poisson_P_pv_anno = all_tests_pv_anno["p_value",],
                         Matches_py = all_tests_py["matches",],
                         Rate_ratio_py = all_tests_py["rate_ratio",],
                         Poisson_P_py = all_tests_py["p_value",])
 ```
 
 ```{r}
-padj <- p.adjust(c(enrich_df_5utr$Poisson_P_pv, enrich_df_5utr$Poisson_P_py),
+padj <- p.adjust(c(enrich_df_5utr$Poisson_P_pv, enrich_df_5utr$Poisson_P_pv_anno,
+                   enrich_df_5utr$Poisson_P_py),
                  method = "fdr")
 
 enrich_df_5utr$FDR_global_pv <- padj[1:80]
-enrich_df_5utr$FDR_global_py <- padj[81:160]
+enrich_df_5utr$FDR_global_pv_anno <- padj[81:160]
+enrich_df_5utr$FDR_global_py <- padj[161:240]
 ```
 
 P. vivax still has a lot of UGUANNNUA and UGUANNUA motifs in the 5' UTR.
 
 ```{r}
 enriched_motifs_pv <- enrich_df_5utr$Motif[enrich_df_5utr$FDR_global_pv < 0.05]
+enriched_motifs_pv_anno <-
+    enrich_df_5utr$Motif[enrich_df_5utr$FDR_global_pv_anno < 0.05]
 enriched_motifs_py <- enrich_df_5utr$Motif[enrich_df_5utr$FDR_global_py < 0.05]
 ```
 
@@ -358,23 +387,32 @@ enrich_df_3utr <- enrich_df
 
 ```{r}
 enrich_df <- data.frame(
-    Motif = rep(all_motifs, times = 6),
-    Species = rep(rep(c("*P. vivax* P01", "*P. yoelii* 17X"), each = 80), times = 3),
-    Region = rep(c("3' UTR", "5' UTR", "CDS"), each = 160),
+    Motif = rep(all_motifs, times = 8),
+    Species = c(
+        rep(rep(c("*P. vivax* P01", "*P. yoelii* 17X"), each = 80), times = 3),
+        rep("*P. vivax* P01", times = 160)
+        ),
+    Region = c(
+        rep(c("3' UTR", "5' UTR", "CDS"), each = 160),
+        rep(c("3' UTR anno only", "5' UTR anno only"), each = 80)
+        ),
     Matches = c(
         enrich_df_3utr$Matches_pv, enrich_df_3utr$Matches_py,
         enrich_df_5utr$Matches_pv, enrich_df_5utr$Matches_py,
-        enrich_df_cds$Matches_pv, enrich_df_cds$Matches_py
+        enrich_df_cds$Matches_pv, enrich_df_cds$Matches_py,
+        enrich_df_3utr$Matches_pv_anno, enrich_df_5utr$Matches_pv_anno
     ),
     Rate_ratio = c(
         enrich_df_3utr$Rate_ratio_pv, enrich_df_3utr$Rate_ratio_py,
         enrich_df_5utr$Rate_ratio_pv, enrich_df_5utr$Rate_ratio_py,
-        enrich_df_cds$Rate_ratio_pv, enrich_df_cds$Rate_ratio_py
+        enrich_df_cds$Rate_ratio_pv, enrich_df_cds$Rate_ratio_py,
+        enrich_df_3utr$Rate_ratio_pv_anno, enrich_df_5utr$Rate_ratio_pv_anno
     ),
     Poisson_P = c(
         enrich_df_3utr$Poisson_P_pv, enrich_df_3utr$Poisson_P_py,
         enrich_df_5utr$Poisson_P_pv, enrich_df_5utr$Poisson_P_py,
-        enrich_df_cds$Poisson_P_pv, enrich_df_cds$Poisson_P_py
+        enrich_df_cds$Poisson_P_pv, enrich_df_cds$Poisson_P_py,
+        enrich_df_3utr$Poisson_P_pv_anno, enrich_df_5utr$Poisson_P_pv_anno
     )
 )
 
@@ -383,12 +421,12 @@ enrich_df$Global_FDR <- p.adjust(enrich_df$Poisson_P, method = "fdr")
 
 ```{r}
 #write.table(enrich_df,
-#            "../results/Motif_enrichment_2026-10-08.txt",
+#            "../results/Motif_enrichment_2026-10-11.txt",
 #            sep = "\t", row.names = FALSE, col.names = TRUE)
 ```
 
 ```{r}
-enrich_df <- read.table("../results/Motif_enrichment_2026-10-08.txt",
+enrich_df <- read.table("../results/Motif_enrichment_2026-10-11.txt",
                         sep = "\t", header = TRUE)
 ```
 
@@ -399,7 +437,8 @@ enrich_df_sig <- enrich_df[enrich_df$Global_FDR < 0.05,]
 enrich_df_sig$Short <- substring(enrich_df_sig$Motif, 5,
                                  nchar(enrich_df_sig$Motif) - 2)
 enrich_df_sig$Region <- factor(enrich_df_sig$Region,
-                               levels = c("5' UTR", "CDS", "3' UTR"))
+                               levels = c("5' UTR", "5' UTR anno only", "CDS",
+                                          "3' UTR", "3' UTR anno only"))
 
 table(enrich_df_sig$Region, enrich_df_sig$Species)
 
@@ -408,14 +447,16 @@ table(enrich_df_sig$Short, enrich_df_sig$Species)
 
 Overall enrichment of UGUANNNUA
 
-| Region           | Rate ratio | P-value |
-|------------------|------------|---------|
-| P. vivax 5' UTR  | 1.28       | 1.3e-32 |
-| P. vivax CDS     | 0.98       | 0.81    |
-| P. vivax 3' UTR  | 1.26       | 9.6e-26 |
-| P. yoelii 5' UTR | 0.96       | 1.0     |
-| P. yoelii CDS    | 0.65       | 1.0     |
-| P. yoelii 3' UTR | 0.94       | 1.0     |
+| Region                         | Rate ratio | P-value |
+|--------------------------------|------------|---------|
+| P. vivax 5' UTR                | 1.28       | 1.3e-32 |
+| P. vivax 5' UTR annotated only | 1.39       | 4.0e-22 |
+| P. vivax CDS                   | 0.98       | 0.81    |
+| P. vivax 3' UTR                | 1.26       | 9.6e-26 |
+| P. vivax 3' UTR annotated only | 1.44       | 1.3e-22 |
+| P. yoelii 5' UTR               | 0.96       | 1.0     |
+| P. yoelii CDS                  | 0.65       | 1.0     |
+| P. yoelii 3' UTR               | 0.94       | 1.0     |
 
 ```{r}
 temp <- test_motif_enrichment("UGUANNNUA", seq_pv_3utr_split)
@@ -435,18 +476,26 @@ temp
 
 temp <- test_motif_enrichment("UGUANNNUA", seq_py_cds_splice)
 temp
+
+temp <- test_motif_enrichment("UGUANNNUA", seq_pv_3utr_anno_split)
+temp
+
+temp <- test_motif_enrichment("UGUANNNUA", seq_pv_5utr_anno_split)
+temp
 ```
 
 Overall enrichment of UGUAHHHUA
 
-| Region           | Rate ratio | P-value |
-|------------------|------------|---------|
-| P. vivax 5' UTR  | 1.24       | 3.9e-17 |
-| P. vivax CDS     | 1.10       | 8.3e-4  |
-| P. vivax 3' UTR  | 1.35       | 1.4e-29 |
-| P. yoelii 5' UTR | 1.00       | 0.44    |
-| P. yoelii CDS    | 0.68       | 1.00    |
-| P. yoelii 3' UTR | 1.03       | 0.045   |
+| Region                         | Rate ratio | P-value |
+|--------------------------------|------------|---------|
+| P. vivax 5' UTR                | 1.24       | 3.9e-17 |
+| P. vivax 5' UTR annotated only | 1.36       | 7.2e-12 |
+| P. vivax CDS                   | 1.10       | 8.3e-4  |
+| P. vivax 3' UTR                | 1.35       | 1.4e-29 |
+| P. vivax 3' UTR annotated only | 1.59       | 8.4e-22 |
+| P. yoelii 5' UTR               | 1.00       | 0.44    |
+| P. yoelii CDS                  | 0.68       | 1.00    |
+| P. yoelii 3' UTR               | 1.03       | 0.045   |
 
 ```{r}
 temp <- test_motif_enrichment("UGUAHHHUA", seq_pv_3utr_split)
@@ -466,18 +515,26 @@ temp
 
 temp <- test_motif_enrichment("UGUAHHHUA", seq_py_cds_splice)
 temp
+
+temp <- test_motif_enrichment("UGUAHHHUA", seq_pv_3utr_anno_split)
+temp
+
+temp <- test_motif_enrichment("UGUAHHHUA", seq_pv_5utr_anno_split)
+temp
 ```
 
 Overall enrichment of UGUAMHHUA (M = A or C, H = A, C, or T)
 
-| Region           | Rate ratio | P-value |
-|------------------|------------|---------|
-| P. vivax 5' UTR  | 1.23       | 3.8e-10 |
-| P. vivax CDS     | 1.02       | 0.31    |
-| P. vivax 3' UTR  | 1.36       | 7.3e-20 |
-| P. yoelii 5' UTR | 0.81       | 1.0     |
-| P. yoelii CDS    | 0.57       | 1.0     |
-| P. yoelii 3' UTR | 0.76       | 1.0     |
+| Region                         | Rate ratio | P-value |
+|--------------------------------|------------|---------|
+| P. vivax 5' UTR                | 1.23       | 3.8e-10 |
+| P. vivax 5' UTR annotated only | 1.28       | 6.9e-06 |
+| P. vivax CDS                   | 1.02       | 0.31    |
+| P. vivax 3' UTR                | 1.36       | 7.3e-20 |
+| P. vivax 3' UTR annotated only | 1.53       | 4.8e-13 |
+| P. yoelii 5' UTR               | 0.81       | 1.0     |
+| P. yoelii CDS                  | 0.57       | 1.0     |
+| P. yoelii 3' UTR               | 0.76       | 1.0     |
 
 ```{r}
 temp <- test_motif_enrichment("UGUAMHHUA", seq_pv_3utr_split)
@@ -497,6 +554,12 @@ temp
 
 temp <- test_motif_enrichment("UGUAMHHUA", seq_py_cds_splice)
 temp
+
+temp <- test_motif_enrichment("UGUAMHHUA", seq_pv_3utr_anno_split)
+temp
+
+temp <- test_motif_enrichment("UGUAMHHUA", seq_pv_5utr_anno_split)
+temp
 ```
 
 ## Visualize enrichment test
@@ -507,10 +570,13 @@ This is a component of Supplementary Figure 5.
 #| fig.width: 8.2
 #| fig.height: 5.5
 p <- enrich_df %>%
+    filter(Region %in% c("5' UTR", "CDS", "3' UTR")) %>%
     mutate(Region = factor(Region, levels = c("5' UTR", "CDS", "3' UTR"))) %>%
     ggplot(aes(x = Matches, y = Rate_ratio)) +
     geom_point(aes(color = Global_FDR < 0.05)) +
-    geom_text_repel(data = enrich_df_sig, mapping = aes(label = Short),
+    geom_text_repel(data = filter(enrich_df_sig,
+                                  Region %in% c("5' UTR", "CDS", "3' UTR")),
+                    mapping = aes(label = Short),
                     color = "red") +
     scale_color_manual(values = c("black", "red")) +
     xlab("N. motifs found") +
@@ -523,7 +589,7 @@ print(p)
 ```
 
 ```{r}
-pdf("../results/figure_components/enrichment_scatter_2026-10-08.pdf",
+pdf("../results/figure_components/enrichment_scatter_2026-10-11.pdf",
     width = 8.2, height = 5.5)
 print(p)
 dev.off()
