@@ -1000,18 +1000,20 @@ grid_prep <- combined_df %>%
 grid_prep$Motif_category <- "9nuc with G"
 grid_prep$Motif_category[nchar(grid_prep$Motif) == 8] <- "8nuc"
 grid_prep$Motif_category[grep("^UGUA[UCA]{3}UA$", grid_prep$Motif)] <- "9nuc HHH"
+
+grid_prep$Region2 <- sub(" only$", "", grid_prep$Region)
 ```
 
 ```{r}
-#| fig.width: 6
+#| fig.width: 7
 #| fig.height: 12.5
 p <- grid_prep %>%
     filter(!is.na(FDR)) %>%
 ggplot(aes(x = Test, y = Motif)) +
     geom_tile(aes(fill = FDR), width = 1, height = 1, color = "black") +
     geom_text(aes(label = Short), data = filter(grid_prep, FDR == "<0.05")) +
-    facet_grid(rows = vars(Motif_category), cols = vars(Region),
-               scales = "free_y", space = "free_y") +
+    facet_grid(rows = vars(Motif_category), cols = vars(Region2),
+               scales = "free", space = "free") +
     scale_fill_manual(values = c("≥0.2" = "white", "<0.2" = "lightblue",
                                  "<0.05" = "lightgreen")) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
@@ -1019,8 +1021,8 @@ print(p)
 ```
 
 ```{r}
-pdf("../results/figure_components/motif_significance_grid_2026-10-09.pdf",
-    width = 6, height = 12.5)
+pdf("../results/figure_components/motif_significance_grid_2026-10-12.pdf",
+    width = 7, height = 12.5)
 print(p)
 dev.off()
 ```
