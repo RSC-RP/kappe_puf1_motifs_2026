@@ -748,12 +748,23 @@ res_pv <- read.table("../results/vivax_dge_results.txt",
                      sep = "\t", header = TRUE)
 ```
 
+Mark genes in DGE results by whether or not they had an annotated UTR
+
+```{r}
+genes_w_3utr_anno <- sub("\\..*", "", sub("^utr_", "", gff_pv_3utr$ID))
+genes_w_5utr_anno <- sub("\\..*", "", sub("^utr_", "", gff_pv_5utr$ID))
+
+res_pv$Annotated_3UTR <- res_pv$Gene %in% genes_w_3utr_anno # 2856 genes
+res_pv$Annotated_5UTR <- res_pv$Gene %in% genes_w_5utr_anno # 2926 genes
+```
+
 Set up data frame to contain output for all motifs, in the two UTR regions.
 
 ```{r}
 dge_enrich_df <- data.frame(
-    Motif = rep(all_motifs, times = 2),
-    Region = rep(c("3' UTR", "5' UTR"), each = length(all_motifs))
+    Motif = rep(all_motifs, times = 4),
+    Region = rep(c("3' UTR", "5' UTR", "3' UTR anno only", "5' UTR anno only"),
+                 each = length(all_motifs))
 )
 
 dge_enrich_df$Mean_logFC_with <- NA_real_
@@ -766,21 +777,34 @@ Loop through motifs and fill in results
 
 ```{r}
 for(motif in all_motifs){
-    for(reg in c("3' UTR", "5' UTR")){
-        if(reg == "3' UTR"){
+    for(reg in unique(dge_enrich_df$Region)){
+        if(startsWith(reg, "3' UTR")){
             gbm <- genes_by_motif_pv_3utr
         } else {
             gbm <- genes_by_motif_pv_5utr
         }
-        temprows <- which(res_pv$Gene %in% gbm[[motif]])
-        logFC_a <- res_pv$logFC[temprows]
-        logFC_b <- res_pv$logFC[-temprows]
+        if(reg == "3' UTR anno only") {
+            temprows_a <- which(res_pv$Annotated_3UTR & 
+                                    res_pv$Gene %in% gbm[[motif]])
+            temprows_b <- which(res_pv$Annotated_3UTR & 
+                                    !res_pv$Gene %in% gbm[[motif]])
+        } else if(reg == "5' UTR anno only") {
+            temprows_a <- which(res_pv$Annotated_5UTR & 
+                                    res_pv$Gene %in% gbm[[motif]])
+            temprows_b <- which(res_pv$Annotated_5UTR & 
+                                    !res_pv$Gene %in% gbm[[motif]])
+        } else {
+            temprows_a <- which(res_pv$Gene %in% gbm[[motif]])
+            temprows_b <- which(!res_pv$Gene %in% gbm[[motif]])
+        }
+        logFC_a <- res_pv$logFC[temprows_a]
+        logFC_b <- res_pv$logFC[temprows_b]
         i <- which(dge_enrich_df$Motif == motif & dge_enrich_df$Region == reg)
         dge_enrich_df$Mean_logFC_with[i] <- mean(logFC_a)
         dge_enrich_df$Mean_logFC_without[i] <- mean(logFC_b)
-        dge_enrich_df$N_genes[i] <- length(temprows)
+        dge_enrich_df$N_genes[i] <- length(temprows_a)
         
-        if(length(temprows) > 2){
+        if(length(temprows_a) > 2){
             myT <- t.test(logFC_a, logFC_b, alternative = "two.sided")
             dge_enrich_df$Pval_Ttest_twosided[i] <- myT$p.value
         }
@@ -791,7 +815,7 @@ dge_enrich_df$Global_FDR <- p.adjust(dge_enrich_df$Pval_Ttest_twosided,
                                      method = "fdr")
 ```
 
-All that are significant show positive enrichment with hypnozoites. UGUA**CAU**UA in the 3' UTR is the most significant, but not the only. There is also UGUA**AAU**UA, UGUA**ACU**UA, UGUA**CUU**UA (3' UTR), UGUA**AAC**UA, UGUA**ACC**UA, and UGUA**CUA**UA (5' UTR) for the nine-nucleotide motifs, and UGUA**AG**UA in 5' UTR. This set of nine-nucleotide motifs is not exactly the same set that we saw enriched in Pv and Py 3' UTRs but what is similar is that they all lack G's in the variable region.
+All that are significant show positive enrichment with hypnozoites. UGUA**CAU**UA in the 3' UTR is the most significant, but not the only. There is also UGUA**AAU**UA, UGUA**ACU**UA, UGUA**CUU**UA (3' UTR), UGUA**AAC**UA, UGUA**ACC**UA, and UGUA**CUA**UA (5' UTR) for the nine-nucleotide motifs. This set of nine-nucleotide motifs is not exactly the same set that we saw enriched in Pv and Py 3' UTRs but what is similar is that they all lack G's in the variable region. Most of the genes involved had annotated UTRs, and there is little change in significance when the analysis is restricted to genes with annotated UTRs.
 
 ```{r}
 dge_enrich_df %>%
@@ -800,12 +824,12 @@ dge_enrich_df %>%
 
 ```{r}
 #write.table(dge_enrich_df,
-#            file = "../results/DGE_enrichment_2026-10-09.txt",
+#            file = "../results/DGE_enrichment_2026-10-12.txt",
 #            sep = "\t", row.names = FALSE, col.names = TRUE)
 ```
 
 ```{r}
-dge_enrich_df <- read.table("../results/DGE_enrichment_2026-10-09.txt",
+dge_enrich_df <- read.table("../results/DGE_enrichment_2026-10-12.txt",
                             sep = "\t", header = TRUE)
 ```
 
@@ -836,11 +860,20 @@ nn_motifs <- paste0(
 ```
 
 ```{r}
-test_enrich <- function(motifs, gbm){
+test_enrich <- function(motifs, gbm, anno5utr = FALSE, anno3utr = FALSE){
     thesegenes <- gbm[motifs] |> unlist() |> unique()
-    temprows <- which(res_pv$Gene %in% thesegenes)
-    logFC_a <- res_pv$logFC[temprows]
-    logFC_b <- res_pv$logFC[-temprows]
+    temprows_a <- res_pv$Gene %in% thesegenes
+    temprows_b <- !temprows_a
+    if(anno3utr){
+        temprows_a <- temprows_a & res_pv$Annotated_3UTR
+        temprows_b <- temprows_b & res_pv$Annotated_3UTR
+    }
+    if(anno5utr){
+        temprows_a <- temprows_a & res_pv$Annotated_5UTR
+        temprows_b <- temprows_b & res_pv$Annotated_5UTR
+    }
+    logFC_a <- res_pv$logFC[which(temprows_a)]
+    logFC_b <- res_pv$logFC[which(temprows_b)]
     myT <- t.test(logFC_a, logFC_b, alternative = "two.sided")
     return(myT)
 }
@@ -848,14 +881,20 @@ test_enrich <- function(motifs, gbm){
 
 The best result is UGUAMHHUA in the 3' UTR. These results also confirm that the 8-nucleotide motifs are not associated with gene expression.
 
-| Motif     | Region | Mean logFC with | Mean logFC w/o | P-value |
-|-----------|--------|-----------------|----------------|---------|
-| UGUAMHHUA | 3' UTR | -0.832          | -1.708         | 5.1e-6  |
-| UGUAMHHUA | 5' UTR | -1.566          | -1.651         | 0.66    |
-| UGUAHHHUA | 3' UTR | -1.182          | -1.700         | 0.0038  |
-| UGUAHHHUA | 5' UTR | -1.715          | -1.634         | 0.63    |
-| UGUANNUA  | 3' UTR | -1.502          | -1.702         | 0.090   |
-| UGUANNUA  | 5' UTR | -1.591          | -1.675         | 0.45    |
+| Motif     | Region           | Mean logFC with | Mean logFC w/o | P-value |
+|-----------|------------------|-----------------|----------------|---------|
+| UGUAMHHUA | 3' UTR           | -0.832          | -1.708         | 5.1e-6  |
+| UGUAMHHUA | 5' UTR           | -1.566          | -1.651         | 0.66    |
+| UGUAMHHUA | 3' UTR annotated | -0.785          | -1.736         | 9.5e-7  |
+| UGUAMHHUA | 5' UTR annotated | -1.527          | -1.663         | 0.49    |
+| UGUAHHHUA | 3' UTR           | -1.182          | -1.700         | 0.0038  |
+| UGUAHHHUA | 5' UTR           | -1.715          | -1.634         | 0.63    |
+| UGUAHHHUA | 3' UTR annotated | -1.151          | -1.727         | 0.0015  |
+| UGUAHHHUA | 5' UTR annotated | -1.735          | -1.639         | 0.58    |
+| UGUANNUA  | 3' UTR           | -1.502          | -1.702         | 0.090   |
+| UGUANNUA  | 5' UTR           | -1.591          | -1.675         | 0.45    |
+| UGUANNUA  | 3' UTR annotated | -1.473          | -1.742         | 0.029   |
+| UGUANNUA  | 5' UTR annotated | -1.590          | -1.689         | 0.40    |
 
 ```{r}
 test_enrich(mhh_motifs, genes_by_motif_pv_3utr)
@@ -869,6 +908,20 @@ test_enrich(hhh_motifs, genes_by_motif_pv_5utr)
 test_enrich(nn_motifs, genes_by_motif_pv_3utr)
 
 test_enrich(nn_motifs, genes_by_motif_pv_5utr)
+
+# Annotated UTRs only
+
+test_enrich(mhh_motifs, genes_by_motif_pv_3utr, anno3utr = TRUE)
+
+test_enrich(mhh_motifs, genes_by_motif_pv_5utr, anno5utr = TRUE)
+
+test_enrich(hhh_motifs, genes_by_motif_pv_3utr, anno3utr = TRUE)
+
+test_enrich(hhh_motifs, genes_by_motif_pv_5utr, anno5utr = TRUE)
+
+test_enrich(nn_motifs, genes_by_motif_pv_3utr, anno3utr = TRUE)
+
+test_enrich(nn_motifs, genes_by_motif_pv_5utr, anno5utr = TRUE)
 ```
 
 The P-value of UGUAMHHUA in the 3' UTR is a little better than UGUACAUUA although the difference in logFC is not as great.
