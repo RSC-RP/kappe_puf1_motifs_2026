@@ -645,7 +645,7 @@ Reducing it to those that were significant in both the 3' and 5' UTRs in both sp
 
 ## Assign motifs to genes
 
-If we just search the 3' UTR, 5' UTR, or CDS sequence directly we will have to back-calculate genomic coordinates if we want them.
+If we just search the 3' UTR, 5' UTR, or CDS sequence directly we will have to back-calculate genomic coordinates if we want them. We can get distance to the CDS however, which is more important for conservation between species.
 
 ```{r}
 matches_by_motif_pv <- sapply(
@@ -657,18 +657,22 @@ matches_by_motif_pv <- sapply(
                          Position = unlist(start(vm)))
         df1$Motif <- x
         df1$Region <- "3' UTR"
+        df1$Dist_to_CDS <- df1$Position
         
         vm <- vmatchPattern(pat, subject = seq_pv_5utr)
         df2 <- data.frame(Gene = rep(names(vm), times = lengths(vm)),
                          Position = unlist(start(vm)))
         df2$Motif <- x
         df2$Region <- "5' UTR"
+        utr_sizes <- rep(lengths(seq_pv_5utr), times = lengths(vm))
+        df2$Dist_to_CDS <- utr_sizes - df2$Position - nchar(pat) + 2L
         
         vm <- vmatchPattern(pat, subject = seq_pv_cds_splice)
         df3 <- data.frame(Gene = rep(names(vm), times = lengths(vm)),
                          Position = unlist(start(vm)))
         df3$Motif <- x
         df3$Region <- "CDS"
+        df3$Dist_to_CDS <- rep(0L, nrow(df3))
         
         return(rbind(df1, df2, df3))
     },
@@ -687,18 +691,22 @@ matches_by_motif_py <- sapply(
                          Position = unlist(start(vm)))
         df1$Motif <- rep(x, nrow(df1))
         df1$Region <- rep("3' UTR", nrow(df1))
+        df1$Dist_to_CDS <- df1$Position
         
         vm <- vmatchPattern(pat, subject = seq_py_5utr)
         df2 <- data.frame(Gene = rep(names(vm), times = lengths(vm)),
                          Position = unlist(start(vm)))
         df2$Motif <- rep(x, nrow(df2))
         df2$Region <- rep("5' UTR", nrow(df2))
+        utr_sizes <- rep(lengths(seq_py_5utr), times = lengths(vm))
+        df2$Dist_to_CDS <- utr_sizes - df2$Position - nchar(pat) + 2L
         
         vm <- vmatchPattern(pat, subject = seq_py_cds_splice)
         df3 <- data.frame(Gene = rep(names(vm), times = lengths(vm)),
                          Position = unlist(start(vm)))
         df3$Motif <- rep(x, nrow(df3))
         df3$Region <- rep("CDS", nrow(df3))
+        df3$Dist_to_CDS <- rep(0L, nrow(df3))
         
         return(rbind(df1, df2, df3))
     },
@@ -725,9 +733,9 @@ genes_by_motif_py_3utr <- split(matches_py$Gene[temp],
 
 ```{r}
 # save(matches_pv, matches_py,
-#      genes_by_motif_pv_txpt, genes_by_motif_py_txpt,
-#      genes_by_motif_pv_3utr, genes_by_motif_py_3utr,
-#      file = "../results/R_objects/matches_2026-10-08.RData")
+#   genes_by_motif_pv_txpt, genes_by_motif_py_txpt,
+#   genes_by_motif_pv_3utr, genes_by_motif_py_3utr,
+#   file = "../results/R_objects/matches_2026-10-20.RData")
 ```
 
 ## Motif enrichment in DGE
@@ -1103,6 +1111,100 @@ summary(res_pv$logFC[res_pv$Gene %in% genes_conserved_mhh])
 summary(res_pv$logFC[!res_pv$Gene %in% genes_conserved_mhh])
 summary(res_pv$logFC[res_pv$Gene %in%
                          setdiff(motif_genes_pv_3utr, genes_conserved_mhh)])
+```
+
+## Conservation of motif location
+
+For the 49 genes that are expressed in Pv and Py and have UGUACAUUA in the 3' UTR of both species as well, compare the position of the motifs. In Pv we have 55 matches across the 49 genes, and in Py we have 53 matches across the 49 genes.
+
+```{r}
+ortho_sub <- ortho_df %>% filter(Vivax_gene %in% genes_conserved_mhh)
+
+matches_pv_sub <- matches_pv %>%
+    filter(Gene %in% ortho_sub$Vivax_gene &
+               Motif %in% mhh_motifs &
+               Region == "3' UTR") %>%
+    rename(Vivax_gene = Gene,
+           Vivax_motif = Motif,
+           Vivax_dist_to_CDS = Dist_to_CDS) %>%
+    left_join(select(ortho_sub, Vivax_gene, Yoelii_gene)) %>%
+    select(Vivax_gene, Yoelii_gene, Vivax_motif, Vivax_dist_to_CDS)
+
+matches_py_sub <- matches_py %>%
+    filter(Gene %in% ortho_sub$Yoelii_gene &
+               Motif %in% mhh_motifs &
+               Region == "3' UTR") %>%
+    rename(Yoelii_gene = Gene,
+           Yoelii_motif = Motif,
+           Yoelii_dist_to_CDS = Dist_to_CDS) %>%
+    left_join(select(ortho_sub, Vivax_gene, Yoelii_gene)) %>%
+    select(Vivax_gene, Yoelii_gene, Yoelii_motif, Yoelii_dist_to_CDS)
+
+matches_combined <- full_join(matches_pv_sub, matches_py_sub,
+                              by = join_by(Vivax_gene, Yoelii_gene),
+                              relationship = "many-to-many")
+
+temp1 <- strsplit(matches_combined$Vivax_motif, split = "")
+temp2 <- strsplit(matches_combined$Yoelii_motif, split = "")
+
+matches_combined$Motif_distance <-
+    mapply(\(x, y) sum(x != y), x = temp1, y = temp2)
+```
+
+Looking at duplicates, when there were multiple matches within a 3' UTR it was always only for one species or the other.
+
+```{r}
+dups <-
+    unique(matches_combined$Vivax_gene[duplicated(matches_combined$Vivax_gene)])
+
+matches_combined %>% filter(Vivax_gene %in% dups) %>% arrange(Vivax_gene)
+```
+
+There are 48 matches across 42 genes if we restrict the vivax UTR size to what we were using for predicted UTRs. 95% of the matches have a distance of less than 448 nt from each other, and 75% less than 282. The R-squared is weak, just 5%.
+
+```{r}
+tmprows <- which(matches_combined$Vivax_dist_to_CDS < 700)
+length(unique(matches_combined$Vivax_gene[tmprows]))
+
+summary(abs(matches_combined$Vivax_dist_to_CDS[tmprows] -
+                matches_combined$Yoelii_dist_to_CDS[tmprows]))
+
+quantile(abs(matches_combined$Vivax_dist_to_CDS[tmprows] -
+                 matches_combined$Yoelii_dist_to_CDS[tmprows]),
+         probs = c(0.75, 0.95))
+
+cor(matches_combined$Vivax_dist_to_CDS[tmprows],
+        matches_combined$Yoelii_dist_to_CDS[tmprows],
+    method = "pearson") ^ 2
+
+lm(Vivax_dist_to_CDS ~ Yoelii_dist_to_CDS, matches_combined, tmprows) |> summary()
+```
+
+```{r}
+p <- matches_combined %>%
+    filter(Vivax_dist_to_CDS < 700) %>%
+    ggplot(aes(x = Vivax_dist_to_CDS, y = Yoelii_dist_to_CDS)) +
+    #geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+    geom_abline(slope = 1, intercept = 282, linetype = "dashed") +
+    geom_abline(slope = 1, intercept = -282, linetype = "dashed") +
+    geom_abline(slope = 1, intercept = 448, linetype = "dotted") +
+    geom_abline(slope = 1, intercept = -448, linetype = "dotted") +
+    geom_point(aes(color = Motif_distance)) +
+    #geom_smooth(method = "lm", color = "black") +
+    scale_color_viridis_c(direction = -1) +
+    annotate("text", x = 250, y = 650, label = "95%") +
+    annotate("text", x = 350, y = 575, label = "75%") +
+    annotate("text", x = 550, y = 600, label = "R² = 0.05\nP = 0.12") +
+    coord_fixed()
+
+print(p)
+```
+
+```{r}
+pdf("../results/figure_components/conserved_distance_to_CDS_UGUAMHHUA_3UTR_2026-10-20.pdf",
+    width = 6, height = 5)
+print(p)
+dev.off()
 ```
 
 ## Volcano plot
@@ -1604,9 +1706,9 @@ write.csv(ortho_df, file = "../results/orthologs_2026-06-11.csv")
 ```
 
 ```{r}
-write.csv(matches_pv, file = "../results/matches_pv_2026-06-11.csv",
+write.csv(matches_pv, file = "../results/matches_pv_2026-10-20.csv",
           row.names = FALSE)
-write.csv(matches_py, file = "../results/matches_py_2026-06-11.csv",
+write.csv(matches_py, file = "../results/matches_py_2026-10-20.csv",
           row.names = FALSE)
 ```
 
