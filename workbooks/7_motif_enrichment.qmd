@@ -741,7 +741,7 @@ genes_by_motif_py_3utr <- split(matches_py$Gene[temp],
 ## Motif enrichment in DGE
 
 ```{r}
-load("../results/R_objects/matches_2026-10-08.RData")
+load("../results/R_objects/matches_2026-10-20.RData")
 
 temp <- matches_pv$Region == "5' UTR"
 genes_by_motif_pv_5utr <- split(matches_pv$Gene[temp],
@@ -1160,6 +1160,8 @@ dups <-
 matches_combined %>% filter(Vivax_gene %in% dups) %>% arrange(Vivax_gene)
 ```
 
+### Distance to CDS
+
 There are 48 matches across 42 genes if we restrict the vivax UTR size to what we were using for predicted UTRs. 95% of the matches have a distance of less than 448 nt from each other, and 75% less than 282. The R-squared is weak, just 5%.
 
 ```{r}
@@ -1205,6 +1207,101 @@ pdf("../results/figure_components/conserved_distance_to_CDS_UGUAMHHUA_3UTR_2026-
     width = 6, height = 5)
 print(p)
 dev.off()
+```
+
+### Flanking sequence
+
+Get the 20 nucleotides flanking the motif on either side and see how similar they are.
+
+```{r}
+matches_combined$Vivax_seq_upstream <- ""
+matches_combined$Vivax_seq_downstream <- ""
+matches_combined$Yoelii_seq_upstream <- ""
+matches_combined$Yoelii_seq_downstream <- ""
+
+for(i in seq_len(nrow(matches_combined))){
+    tempseq <- seq_pv_3utr[[matches_combined$Vivax_gene[i]]]
+    temppos <- matches_combined$Vivax_dist_to_CDS[i]
+    temp_st <- max(1, temppos - 20L)
+    temp_ed <- min(length(tempseq), temppos + 28L)
+    tempup_pv <- subseq(tempseq, start = temp_st, end = temppos - 1L)
+    tempdown_pv <- subseq(tempseq, start = temppos + 9L, end = temp_ed)
+    matches_combined$Vivax_seq_upstream[i] <- as.character(tempup_pv)
+    matches_combined$Vivax_seq_downstream[i] <- as.character(tempdown_pv)
+    
+    tempseq <- seq_py_3utr[[matches_combined$Yoelii_gene[i]]]
+    temppos <- matches_combined$Yoelii_dist_to_CDS[i]
+    temp_st <- max(1, temppos - 20L)
+    temp_ed <- min(length(tempseq), temppos + 28L)
+    tempup_py <- subseq(tempseq, start = temp_st, end = temppos - 1L)
+    tempdown_py <- subseq(tempseq, start = temppos + 9L, end = temp_ed)
+    matches_combined$Yoelii_seq_upstream[i] <- as.character(tempup_py)
+    matches_combined$Yoelii_seq_downstream[i] <- as.character(tempdown_py)
+}
+
+matches_combined$Flanking_sequence_similarity <-
+    sapply(
+        seq_len(nrow(matches_combined)),
+        \(i){
+            seq_vu <- matches_combined$Vivax_seq_upstream[i]
+            seq_vd <- matches_combined$Vivax_seq_downstream[i]
+            seq_yu <- matches_combined$Yoelii_seq_upstream[i]
+            seq_yd <- matches_combined$Yoelii_seq_downstream[i]
+            
+            # Trim sequences if necessary
+            nv <- nchar(seq_vu)
+            ny <- nchar(seq_yu)
+            if(nv < ny){
+                seq_yu <- substr(seq_yu, ny-nv+1, ny)
+            }
+            if(ny < nv){
+                seq_vu <- substr(seq_vu, nv-ny+1, nv)
+            }
+            nv <- nchar(seq_vd)
+            ny <- nchar(seq_yd)
+            if(nv != ny){
+                n <- min(c(nv, ny))
+                seq_vd <- substr(seq_vd, 1, n)
+                seq_yd <- substr(seq_yd, 1, n)
+            }
+            seq_v <- strsplit(paste0(seq_vu, seq_vd), "")[[1]]
+            seq_y <- strsplit(paste0(seq_yu, seq_yd), "")[[1]]
+            
+            if(length(seq_v) != length(seq_y)){
+                stop(paste("Error row", i))
+            }
+            
+            return(mean(seq_v == seq_y))
+        }
+    )
+```
+
+```{r}
+p <- matches_combined %>%
+    filter(Vivax_dist_to_CDS < 700) %>%
+    ggplot(aes(x = Vivax_dist_to_CDS, y = Yoelii_dist_to_CDS)) +
+    geom_abline(slope = 1, intercept = 282, linetype = "dashed") +
+    geom_abline(slope = 1, intercept = -282, linetype = "dashed") +
+    geom_abline(slope = 1, intercept = 448, linetype = "dotted") +
+    geom_abline(slope = 1, intercept = -448, linetype = "dotted") +
+    geom_point(aes(color = Flanking_sequence_similarity)) +
+    scale_color_viridis_c() +
+    annotate("text", x = 250, y = 650, label = "95%") +
+    annotate("text", x = 350, y = 575, label = "75%") +
+    annotate("text", x = 550, y = 600, label = "R² = 0.05\nP = 0.12") +
+    coord_fixed()
+
+print(p)
+```
+
+```{r}
+p <- matches_combined %>%
+    filter(Vivax_dist_to_CDS < 700) %>%
+    ggplot(aes(x = abs(Yoelii_dist_to_CDS - Vivax_dist_to_CDS),
+               y = Flanking_sequence_similarity)) +
+    geom_point() +
+    geom_smooth()
+print(p)
 ```
 
 ## Volcano plot
